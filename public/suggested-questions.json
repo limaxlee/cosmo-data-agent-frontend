@@ -1,0 +1,22 @@
+[
+  {
+    "title": "Get Started",
+    "question": "What are your capabilities?",
+    "icon": "MessageSquare"
+  },
+  {
+    "title": "Check inspection status",
+    "question": "Show me inspection status from the past 7 days",
+    "icon": "Bot"
+  },
+  {
+    "title": "Sample a dataset",
+    "question": "Can you sample a dataset?",
+    "icon": "Sparkles"
+  },
+  {
+    "title": "Check inspection models",
+    "question": "What kind of models are deployed on sites?",
+    "icon": "Send"
+  }
+]
