@@ -2,6 +2,12 @@
 
 Runs on **port 13080**, next to `da-backend` on 18080.
 
+The port is chosen to pair mnemonically with the backend's 18080 and to sit
+in the 10000-32767 band: above the registered-service range, and below the
+Linux ephemeral range (32768-60999), so the kernel will never assign it to an
+outbound connection and take it from us. Confirm it is free before the first
+run -- `sudo ss -lntp | grep 13080` should print nothing.
+
 ## On the server
 
 ```bash
@@ -66,19 +72,62 @@ The run script joins the `da_backend` Docker network and reaches the backend as
 backend ever moves off that network, drop `--network da_backend` and use
 `-e BACKEND_ORIGIN=http://10.240.35.173:18080`.
 
+## Logging
+
+There is no `logs/` directory and no volume mount, unlike the backend. Nothing
+in this app writes log files -- Next.js logs to stdout, which Docker captures.
+
+```bash
+sudo docker logs -f da_frontend
+```
+
+What you will and will not see there:
+
+- **Server-side**, and therefore in `docker logs`: the `console` calls in
+  `src/app/api/chat/route.ts` and `src/app/backend/[...path]/route.ts`, plus
+  Next.js's own request logging.
+- **Browser-side**, and therefore *not* on the server at all: the `console.error`
+  calls in `src/components/**`. Those are `"use client"` components, so they run
+  in the visitor's browser and land in their devtools console. No volume mount
+  can capture them; ask the user for a devtools screenshot instead.
+
+Note that `--rm` deletes the captured log file when the container stops, so
+frontend logs do not survive a restart the way the backend's do. See below.
+
 ## Operations
 
 ```bash
-sudo docker logs -f da_frontend      # application logs (stdout)
+sudo docker logs -f da_frontend      # follow logs
 sudo docker stop da_frontend         # --rm means stopping also removes it
 ```
 
-To rebuild after a change: `git pull`, `sudo docker stop da_frontend`, then
-build and run again.
+To deploy a change:
 
-The container runs with `--rm`, matching the backend, so it does **not** survive
-a reboot. To make it persistent, swap `--rm` for `--restart unless-stopped` in
-`run_da_frontend.sh`.
+```bash
+cd ~/projects/<your-repo-dir>/cosmo-data-agent-frontend
+git pull
+sudo docker stop da_frontend
+sudo docker build -t da-frontend:0.0.1 .
+sudo bash ./run_da_frontend.sh
+```
+
+### Making it survive reboots
+
+The container runs with `--rm`, matching the backend, so it does **not** come
+back after a reboot, and its logs are discarded on every stop. `--rm` and
+`--restart` cannot be combined, so fixing both means replacing the `docker run`
+line in `run_da_frontend.sh` with:
+
+```bash
+docker run --name da_frontend -d --restart unless-stopped \
+  --log-opt max-size=10m --log-opt max-file=3 \
+  --network da_backend -p 13080:13080 \
+  -e BACKEND_ORIGIN=http://da_backend:18080 da-frontend:0.0.1
+```
+
+The `--log-opt` flags cap log growth at 30 MB; without `--rm` to clean up, the
+default `json-file` driver would otherwise grow without bound. Redeploying then
+needs `sudo docker rm -f da_frontend` instead of `sudo docker stop`.
 
 ## If the port is not reachable from other machines
 
