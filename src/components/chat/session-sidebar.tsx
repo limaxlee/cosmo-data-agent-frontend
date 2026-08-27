@@ -1,13 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useUser } from "@/lib/user-context";
+import { useUser } from "@/providers/user-provider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ExportUtils } from "@/lib/export-utils";
+import { ExportUtils } from "@/lib/chat-export";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState, useEffect, useCallback } from "react";
-import { ChatSession, SessionStorage } from "@/lib/session-storage";
+import { SessionStorage } from "@/lib/session-api";
+import { ChatSession } from "@/lib/types";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 import {
@@ -99,7 +100,7 @@ export function SessionSidebar({
 
   const handleNewSession = () => {
     onNewSession();
-    router.push("/new");
+    router.push("/chat/new");
     setIsMobileOpen(false);
   };
 
@@ -121,7 +122,7 @@ export function SessionSidebar({
 
       if (onThisSession) {
         onNewSession();
-        router.push("/new");
+        router.push("/chat/new");
       }
       await loadSessions();
     } catch (err) {
@@ -179,7 +180,7 @@ export function SessionSidebar({
                 <Button
                   variant="ghost"
                   size="icon"
-                   => setIsCollapsed(!isCollapsed)}
+                  onClick={() => setIsCollapsed(!isCollapsed)}
                   className="h-10 w-10 hover:bg-accent text-foreground"
                 >
                   {isCollapsed ? (
@@ -199,7 +200,7 @@ export function SessionSidebar({
         {!isCollapsed && (
           <Button
             variant="ghost"
-            
+            onClick={handleNewSession}
             className="w-full justify-start mb-2 hover:bg-accent text-foreground"
           >
             <Plus className="h-4 w-4 mr-2" />
@@ -215,7 +216,7 @@ export function SessionSidebar({
                 autoFocus
                 placeholder="Search chats"
                 value={searchQuery}
-                 => setSearchQuery(e.target.value)}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 onBlur={() => {
                   if (!searchQuery) setIsSearchActive(false);
                 }}
@@ -225,7 +226,7 @@ export function SessionSidebar({
           ) : (
             <Button
               variant="ghost"
-               => setIsSearchActive(true)}
+              onClick={() => setIsSearchActive(true)}
               className="w-full justify-start hover:bg-accent text-foreground"
             >
               <Search className="h-4 w-4 mr-2" />
@@ -245,7 +246,7 @@ export function SessionSidebar({
                     <Button
                       variant="ghost"
                       size="icon"
-                      
+                      onClick={handleNewSession}
                       className="w-10 h-10 -translate-y-0.5 hover:bg-accent text-foreground"
                     >
                       <Plus className="h-4 w-4" />
@@ -292,7 +293,7 @@ export function SessionSidebar({
                                 : "hover:shadow-sm"
                             }
                             `}
-                           => handleSessionClick(session)}
+                          onClick={() => handleSessionClick(session)}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex-1 min-w-0">
@@ -308,7 +309,7 @@ export function SessionSidebar({
                             </div>
 
                             <DropdownMenu
-                               =>
+                              onOpenChange={(open) =>
                                 setOpenMenuId(open ? session.id : null)
                               }
                             >
@@ -321,24 +322,24 @@ export function SessionSidebar({
                                       ? "opacity-100"
                                       : "opacity-0 group-hover:opacity-100"
                                   }`}
-                                   => e.stopPropagation()}
+                                  onClick={(e) => e.stopPropagation()}
                                 >
                                   <MoreVertical className="h-3 w-3" />
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent
                                 align="end"
-                                className="w-48 border-0 shadow-none bg-stone-100 dark:bg-zinc-800"
+                                className="w-48 border-0 shadow-none bg-popover dark:bg-zinc-800"
                               >
                                 <DropdownMenuItem
-                                   => handleCopy(e, session)}
+                                  onClick={(e) => handleCopy(e, session)}
                                   className="text-sm"
                                 >
                                   <Copy className="h-4 w-4 mr-2" />
                                   Copy to Clipboard
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                   =>
+                                  onClick={(e) =>
                                     handleExport(e, session, "json")
                                   }
                                   className="text-sm"
@@ -347,7 +348,7 @@ export function SessionSidebar({
                                   Rename
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                   =>
+                                  onClick={(e) =>
                                     handleDeleteSession(e, session.id)
                                   }
                                   className="text-red-400 focus:text-red-400 text-sm"
@@ -386,7 +387,7 @@ export function SessionSidebar({
 
       {/* Mobile Sidebar */}
       <div className="md:hidden">
-        <Sheet open={isMobileOpen} >
+        <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
           <SheetTrigger asChild>
             <Button
               variant="outline"

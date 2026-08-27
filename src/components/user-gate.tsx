@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useUser } from "@/lib/user-context";
+import { useUser } from "@/providers/user-provider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -25,14 +25,14 @@ export function UserGate({ children }: { children: React.ReactNode }) {
             autoFocus
             placeholder="e.g. m.alenova"
             value={value}
-             => setValue(e.target.value)}
+            onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") setUserId(value);
             }}
           />
           <Button
             className="w-full"
-             => setUserId(value)}
+            onClick={() => setUserId(value)}
             disabled={!value.trim()}
           >
             Continue

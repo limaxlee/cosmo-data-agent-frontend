@@ -4,7 +4,7 @@ import remarkGfm from "remark-gfm";
 import ReactMarkdown from "react-markdown";
 
 import { useEffect, useState } from "react";
-import { Message } from "@/lib/api";
+import { Message } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Check, Copy, RefreshCw } from "lucide-react";
@@ -143,7 +143,7 @@ export function MessageItem({
                       <img
                         src={objectUrl}
                         alt="Attached image"
-                         => setImgError(true)}
+                        onError={() => setImgError(true)}
                         className="max-h-80 max-w-full w-auto rounded-lg border border-border/40 object-contain"
                       />
                     ))}
@@ -263,7 +263,7 @@ export function MessageItem({
                   variant="ghost"
                   size="icon"
                   className="h-6 w-6 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-                  
+                  onClick={handleCopy}
                 >
                   {copied ? (
                     <Check className="h-3 w-3 text-black dark:text-white" />
@@ -286,7 +286,7 @@ export function MessageItem({
                     variant="ghost"
                     size="icon"
                     className="h-6 w-6 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-                    
+                    onClick={onRegenerate}
                   >
                     <RefreshCw className="h-3 w-3" />
                   </Button>

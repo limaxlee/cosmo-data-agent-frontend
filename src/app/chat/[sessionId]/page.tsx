@@ -1,4 +1,4 @@
-import Chat from "@/components/Chat";
+import ChatView from "@/components/chat/chat-view";
 
 export default async function ChatPage({
   params,
@@ -8,7 +8,7 @@ export default async function ChatPage({
   const { sessionId } = await params;
   return (
     <main>
-      <Chat initialSessionId={sessionId} />
+      <ChatView initialSessionId={sessionId} />
     </main>
   );
 }

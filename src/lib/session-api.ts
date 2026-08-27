@@ -1,14 +1,10 @@
-import { Message } from "./api";
+import { ChatSession, Message } from "./types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
-
-export interface ChatSession {
-  id: string;
-  title: string;
-  messages: Message[];
-  createdAt: Date;
-  updatedAt: Date;
-}
+// Relative on purpose. Requests go to this app's own origin and are
+// forwarded to the ADK backend by src/app/backend/[...path]/route.ts, which
+// keeps every call same-origin -- no CORS, and no backend host baked into
+// the client bundle at build time.
+const API_BASE = "/backend";
 
 interface ApiSession {
   session_id: string;
@@ -181,8 +177,6 @@ function mapApiSession(api: ApiSession): ChatSession {
 }
 
 export class SessionStorage {
-  private static readonly STORAGE_KEY = "chat_sessions";
-
   static async createSession(userId: string): Promise<string> {
     const res = await fetch(
       `${API_BASE}/apps/users/${encodeURIComponent(userId)}/sessions`,
@@ -244,55 +238,6 @@ export class SessionStorage {
     return sessions.sort(
       (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime(),
     );
-  }
-
-  static getSessions(): ChatSession[] {
-    if (typeof window === "undefined") return [];
-
-    try {
-      const stored = localStorage.getItem(this.STORAGE_KEY);
-
-      if (!stored) return [];
-
-      const sessions = JSON.parse(stored) as ChatSession[];
-
-      return sessions
-        .map((session) => ({
-          ...session,
-          createdAt: new Date(session.createdAt),
-          updatedAt: new Date(session.updatedAt),
-        }))
-        .filter((session: ChatSession) => session.messages.length > 0);
-    } catch (error) {
-      console.error("Error loading sessions:", error);
-      return [];
-    }
-  }
-
-  static saveSession(session: ChatSession): void {
-    if (typeof window === "undefined") return;
-
-    try {
-      const sessions = this.getSessions();
-
-      const existingIndex = sessions.findIndex((s) => s.id === session.id);
-
-      if (existingIndex >= 0) {
-        sessions[existingIndex] = session;
-      } else {
-        sessions.unshift(session);
-      }
-
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(sessions));
-    } catch (error) {
-      console.error("Error saving session:", error);
-    }
-  }
-
-  static getLocalSession(id: string): ChatSession | null {
-    const sessions = this.getSessions();
-
-    return sessions.find((s) => s.id === id) || null;
   }
 
   static async getSession(

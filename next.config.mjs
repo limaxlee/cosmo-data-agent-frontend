@@ -14,7 +14,7 @@ const nextConfig = {
     return [
       {
         source: "/",
-        destination: "/new",
+        destination: "/chat/new",
         permanent: false,
       },
     ];

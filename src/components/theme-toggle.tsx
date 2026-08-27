@@ -1,6 +1,6 @@
 "use client";
 
-import { useTheme } from "@/lib/theme-provider";
+import { useTheme } from "@/providers/theme-provider";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Moon, Sun, Monitor } from "lucide-react";
@@ -27,15 +27,15 @@ export function ThemeToggle() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem  => setTheme("light")}>
+        <DropdownMenuItem onClick={() => setTheme("light")}>
           <Sun className="mr-2 h-4 w-4" />
           <span>Light</span>
         </DropdownMenuItem>
-        <DropdownMenuItem  => setTheme("dark")}>
+        <DropdownMenuItem onClick={() => setTheme("dark")}>
           <Moon className="mr-2 h-4 w-4" />
           <span>Dark</span>
         </DropdownMenuItem>
-        <DropdownMenuItem  => setTheme("system")}>
+        <DropdownMenuItem onClick={() => setTheme("system")}>
           <Monitor className="mr-2 h-4 w-4" />
           <span>System</span>
         </DropdownMenuItem>
@@ -52,7 +52,7 @@ export function SimpleThemeToggle() {
       <Sun className="h-4 w-4" />
       <Switch
         checked={actualTheme === "dark"}
-         => setTheme(checked ? "dark" : "light")}
+        onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
       />
       <Moon className="h-4 w-4" />
     </div>

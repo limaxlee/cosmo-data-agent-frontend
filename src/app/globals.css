@@ -3,26 +3,27 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 :root {
-  /* Light mode variables */
-  --background: 20 6% 90%;
-  --foreground: 222.2 84% 4.9%;
-  --card: 20 6% 90%;
-  --card-foreground: 222.2 84% 4.9%;
-  --popover: 20 6% 90%;
-  --popover-foreground: 222.2 84% 4.9%;
-  --primary: 221.2 83.2% 53.3%;
-  --primary-foreground: 210 40% 98%;
-  --secondary: 210 40% 96%;
-  --secondary-foreground: 222.2 84% 4.9%;
-  --muted: 210 40% 96%;
-  --muted-foreground: 215.4 16.3% 46.9%;
-  --accent: 24 6% 83%; 
-  --accent-foreground: 222.2 84% 4.9%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 25 5% 32%;
-  --input: 214.3 31.8% 91.4%;
-  --ring: 221.2 83.2% 53.3%;
+  /* Light mode variables — cool slate, crisp neutral greys */
+  --background: 220 23% 97%;
+  --foreground: 218 14% 11%;
+  --card: 220 23% 97%;
+  --card-foreground: 218 14% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 218 14% 11%;
+  --primary: 220 84% 48%;
+  --primary-foreground: 220 23% 98%;
+  --secondary: 220 20% 94%;
+  --secondary-foreground: 218 14% 11%;
+  --muted: 220 20% 94%;
+  --muted-foreground: 216 10% 40%;
+  --accent: 216 23% 91%;
+  --accent-foreground: 218 14% 11%;
+  --destructive: 0 72% 45%;
+  --destructive-foreground: 220 23% 98%;
+  --border: 217 16% 90%;
+  /* Raised surface: shared by the composer and the user message bubble */
+  --input: 217 22% 93%;
+  --ring: 220 84% 48%;
   --radius: 0.5rem;
 }
 
@@ -75,25 +76,26 @@
 
 /* Light mode override when data-theme="light" */
 [data-theme="light"] {
-  --background: 20 6% 90%;
-  --foreground: 222.2 84% 4.9%;
-  --card: 20 6% 90%;
-  --card-foreground: 222.2 84% 4.9%;
-  --popover: 20 6% 90%;
-  --popover-foreground: 222.2 84% 4.9%;
-  --primary: 221.2 83.2% 53.3%;
-  --primary-foreground: 210 40% 98%;
-  --secondary: 210 40% 96%;
-  --secondary-foreground: 222.2 84% 4.9%;
-  --muted: 210 40% 96%;
-  --muted-foreground: 215.4 16.3% 46.9%;
-  --accent: 24 6% 83%; 
-  --accent-foreground: 222.2 84% 4.9%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 25 5% 32%;
-  --input: 214.3 31.8% 91.4%;
-  --ring: 221.2 83.2% 53.3%;
+  --background: 220 23% 97%;
+  --foreground: 218 14% 11%;
+  --card: 220 23% 97%;
+  --card-foreground: 218 14% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 218 14% 11%;
+  --primary: 220 84% 48%;
+  --primary-foreground: 220 23% 98%;
+  --secondary: 220 20% 94%;
+  --secondary-foreground: 218 14% 11%;
+  --muted: 220 20% 94%;
+  --muted-foreground: 216 10% 40%;
+  --accent: 216 23% 91%;
+  --accent-foreground: 218 14% 11%;
+  --destructive: 0 72% 45%;
+  --destructive-foreground: 220 23% 98%;
+  --border: 217 16% 90%;
+  /* Raised surface: shared by the composer and the user message bubble */
+  --input: 217 22% 93%;
+  --ring: 220 84% 48%;
 }
 
 @theme inline {

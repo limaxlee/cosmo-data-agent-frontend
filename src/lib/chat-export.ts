@@ -1,4 +1,4 @@
-import { ChatSession } from "./session-storage";
+import { ChatSession } from "./types";
 
 export class ExportUtils {
   static exportToJSON(session: ChatSession): void {

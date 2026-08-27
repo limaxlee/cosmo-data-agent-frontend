@@ -1,8 +1,8 @@
-import { v4 as uuidv4 } from "uuid";
 import { NextRequest, NextResponse } from "next/server";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "";
-const APP_NAME = process.env.ADK_APP_NAME || "";
+// Read at request time (this route only ever runs on the server), so the
+// backend host is a runtime setting rather than a baked-in build value.
+const API_BASE_URL = (process.env.BACKEND_ORIGIN || "").replace(/\/+$/, "");
 const MAX_INPUT_LENGTH = parseInt(
   process.env.NEXT_PUBLIC_MAX_INPUT_LENGTH || "100000",
   10,
@@ -109,54 +109,5 @@ export async function POST(req: NextRequest) {
     return new NextResponse("Internal Server Error", {
       status: 500,
     });
-  }
-}
-
-export async function GET() {
-  try {
-    const userId = uuidv4();
-    const sessionId = uuidv4();
-
-    const response = await fetch(
-      `${API_BASE_URL}/apps/${APP_NAME}/users/${userId}/sessions/${sessionId}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          state: {},
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-
-      console.error(
-        `Error creating backend session (${response.status}):`,
-        errorText,
-      );
-
-      return new NextResponse(errorText, {
-        status: response.status,
-      });
-    }
-
-    return NextResponse.json({
-      userId,
-      sessionId,
-    });
-  } catch (error) {
-    console.error("Error creating session:", error);
-
-    return NextResponse.json(
-      {
-        message: "Internal Server Error",
-      },
-      {
-        status: 500,
-      },
-    );
   }
 }

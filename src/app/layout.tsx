@@ -3,9 +3,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 import localFont from "next/font/local";
 
-import { UserProvider } from "@/lib/user-context";
-import { UserGate } from "@/components/UserGate";
-import { ThemeProvider } from "@/lib/theme-provider";
+import { UserProvider } from "@/providers/user-provider";
+import { UserGate } from "@/components/user-gate";
+import { ThemeProvider } from "@/providers/theme-provider";
 
 const inter = localFont({
   src: [

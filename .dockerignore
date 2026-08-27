@@ -1,0 +1,29 @@
+# Keep the build context small and reproducible: everything the image needs is
+# either checked in or produced by `npm ci` / `npm run build` inside the image.
+.git
+.github
+.husky
+node_modules
+.next
+out
+dist
+
+# Local environment files. Build-time values come from the Dockerfile's ARGs and
+# runtime values from `docker run -e ...`, so a stray local .env must not leak in.
+.env
+.env.*
+!.env.example
+
+*.tsbuildinfo
+npm-debug.log*
+*.log
+logs
+.DS_Store
+.vscode
+.idea
+
+Dockerfile
+.dockerignore
+README.md
+STRUCTURE.md
+MIGRATION_GUIDE.md

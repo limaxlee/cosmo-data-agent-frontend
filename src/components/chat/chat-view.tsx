@@ -1,18 +1,16 @@
 "use client";
 
-import { Message } from "@/lib/api";
+import { Message } from "@/lib/types";
 import { Card } from "@/components/ui/card";
-import { useRouter } from "next/navigation";
-import { useUser } from "@/lib/user-context";
+import { useUser } from "@/providers/user-provider";
 import { Send, Sparkles, Paperclip, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect, useRef } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { MessageItem } from "@/components/message-item";
+import { MessageItem } from "@/components/chat/message-item";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { SessionSidebar } from "@/components/session-sidebar";
-import { SessionStorage, ChatSession } from "@/lib/session-storage";
-import { ExportUtils } from "@/lib/export-utils";
+import { SessionSidebar } from "@/components/chat/session-sidebar";
+import { SessionStorage } from "@/lib/session-api";
 import * as LucideIcons from "lucide-react";
 
 interface SuggestedQuestion {
@@ -57,7 +55,7 @@ const getIcon = (name: string) => {
   return null;
 };
 
-export default function Chat({
+export default function ChatView({
   initialSessionId,
 }: {
   initialSessionId?: string;
@@ -90,8 +88,6 @@ export default function Chat({
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const pinnedMessageRef = useRef<HTMLDivElement>(null);
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
-
-  const router = useRouter();
 
   useEffect(() => {
     if (!userId) return;
@@ -198,7 +194,7 @@ export default function Chat({
     setCurrentSessionTitle("New Chat");
     setSidebarOpen(false);
 
-    window.history.replaceState(null, "", "/new");
+    window.history.replaceState(null, "", "/chat/new");
 
     setTimeout(() => inputRef.current?.focus(), 100);
   };
@@ -385,7 +381,7 @@ export default function Chat({
       <SessionSidebar
         currentSessionId={sessionId || initialSessionId || null}
         userId={userId}
-         (session) =>
+        onSessionSelect={async (session) =>
           session && (await loadSessionFromBackend(session.id))
         }
         onNewSession={startNewChat}
@@ -396,7 +392,7 @@ export default function Chat({
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 md:hidden"
-           => setSidebarOpen(false)}
+          onClick={() => setSidebarOpen(false)}
         />
       )}
 
@@ -440,7 +436,7 @@ export default function Chat({
                     <Card
                       key={index}
                       className="p-4 hover:bg-accent cursor-pointer transition-colors border-border/40"
-                       => setInput(sq.question)}
+                      onClick={() => setInput(sq.question)}
                     >
                       <div className="flex items-center space-x-2">
                         {getIcon(sq.icon)}
@@ -539,22 +535,22 @@ export default function Chat({
               type="file"
               accept={IMAGE_EXTENSIONS.join(",")}
               className="hidden"
-              
+              onChange={handleFileSelect}
             />
 
             <div
-              
-              
-              
-              className={`rounded-2xl bg-[hsl(212_23%_89%)] dark:bg-zinc-800 p-2 transition-shadow focus-within:ring-1 focus-within:ring-stone-300 dark:focus-within:ring-zinc-700 ${
-                isDragging ? "ring-2 ring-stone-400 dark:ring-zinc-500" : ""
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`rounded-2xl bg-input dark:bg-zinc-800 p-2 transition-shadow focus-within:shadow-md ${
+                isDragging ? "ring-2 ring-ring/40 dark:ring-zinc-500" : ""
               }`}
             >
               {/* Top: typing area */}
               <textarea
                 ref={inputRef}
                 value={input}
-                 => {
+                onChange={(e) => {
                   setInput(e.target.value);
 
                   const el = e.target;
@@ -587,7 +583,7 @@ export default function Chat({
 
                     <button
                       type="button"
-                      
+                      onClick={removeFile}
                       aria-label="Remove file"
                       className="shrink-0 rounded-full p-0.5 hover:bg-accent transition-colors"
                     >
@@ -598,7 +594,7 @@ export default function Chat({
                   <div className="group relative">
                     <Button
                       type="button"
-                       => fileInputRef.current?.click()}
+                      onClick={() => fileInputRef.current?.click()}
                       disabled={isSending}
                       variant="ghost"
                       size="icon"
@@ -618,7 +614,7 @@ export default function Chat({
 
                 {/* Right: send button */}
                 <Button
-                  
+                  onClick={handleSend}
                   disabled={isSending || (!input.trim() && !attachedFile)}
                   size="icon"
                   className="h-9 w-9 bg-gradient-to-br from-slate-500 to-slate-600 hover:from-slate-400 hover:to-slate-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
