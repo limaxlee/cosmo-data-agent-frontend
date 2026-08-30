@@ -3,15 +3,17 @@
 import { Message } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import { useUser } from "@/providers/user-provider";
-import { Send, Sparkles, Paperclip, X } from "lucide-react";
+import { Send, Paperclip, X, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect, useRef } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { MessageItem } from "@/components/chat/message-item";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SessionSidebar } from "@/components/chat/session-sidebar";
+import { useFollowReveal } from "@/components/chat/use-follow-reveal";
 import { SessionStorage } from "@/lib/session-api";
-import * as LucideIcons from "lucide-react";
+import { readDraft, writeDraft } from "@/lib/draft-storage";
+import { NEW_CHAT_TITLE, documentTitle } from "@/lib/app-title";
 
 interface SuggestedQuestion {
   title: string;
@@ -33,6 +35,15 @@ const isAllowedFile = (file: File) => {
   return IMAGE_EXTENSIONS.some((ext) => name.endsWith(ext));
 };
 
+// The box grows with its content up to 15 rows, then scrolls. Used while
+// typing and again when a saved draft is put back.
+const fitToText = (el: HTMLTextAreaElement | null) => {
+  if (!el) return;
+
+  el.style.height = "auto";
+  el.style.height = `${Math.min(el.scrollHeight, 15 * 24)}px`;
+};
+
 const fileToDataUrl = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -41,20 +52,6 @@ const fileToDataUrl = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
-const getIcon = (name: string) => {
-  const Icon = (
-    LucideIcons as unknown as {
-      [key: string]: React.ElementType;
-    }
-  )[name];
-
-  if (Icon) {
-    return <Icon className="w-4 h-4 text-black dark:text-white" />;
-  }
-
-  return null;
-};
-
 export default function ChatView({
   initialSessionId,
 }: {
@@ -62,14 +59,21 @@ export default function ChatView({
 }) {
   const { userId } = useUser();
 
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(() => readDraft(initialSessionId ?? ""));
   const [maxLength, setMaxLength] = useState(1000);
   const [isSending, setIsSending] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sessionId, setSessionId] = useState<string>("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isBackendError, setIsBackendError] = useState(false);
-  const [currentSessionTitle, setCurrentSessionTitle] = useState("New Chat");
+
+  // Index of the one message allowed to type itself out: the reply that just
+  // came back. Null everywhere else, so history read back from a session
+  // renders instantly the way it always has.
+  const [revealIndex, setRevealIndex] = useState<number | null>(null);
+  const [currentSessionTitle, setCurrentSessionTitle] = useState(
+    initialSessionId ? "" : NEW_CHAT_TITLE,
+  );
 
   const [suggestedQuestions, setSuggestedQuestions] = useState<
     SuggestedQuestion[]
@@ -88,6 +92,46 @@ export default function ChatView({
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const pinnedMessageRef = useRef<HTMLDivElement>(null);
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
+  const revealingMessageRef = useRef<HTMLDivElement>(null);
+
+  // Follows the reply as it types itself out, but only once it is long enough
+  // to run past the bottom of the pane -- and only until the reader scrolls up.
+  useFollowReveal(scrollAreaRef, revealingMessageRef, revealIndex !== null);
+
+  // Which chat the box belongs to right now. Empty until the first message
+  // creates a session -- what the draft store files under "new".
+  const draftSessionId = sessionId || initialSessionId || "";
+
+  // Every change to the box goes through here, so the saved draft never
+  // drifts from what is on screen.
+  const applyInput = (value: string) => {
+    setInput(value);
+    writeDraft(draftSessionId, value);
+  };
+
+  // Leaves the caret after the last character of whatever was just put in
+  // the box, once React has painted it, so typing carries straight on.
+  const focusInputEnd = () => {
+    requestAnimationFrame(() => {
+      const el = inputRef.current;
+
+      if (!el) return;
+
+      fitToText(el);
+
+      if (!el.value) return;
+
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
+  };
+
+  // Puts a stored draft back on screen. No write: the text is already what
+  // storage holds for that chat.
+  const restoreDraft = (text: string) => {
+    setInput(text);
+    focusInputEnd();
+  };
 
   useEffect(() => {
     if (!userId) return;
@@ -164,6 +208,19 @@ export default function ChatView({
     return () => clearTimeout(timer);
   }, [fileError]);
 
+  // A draft restored on page load has to look like the user just finished
+  // typing it, not like text dropped into a collapsed box.
+  useEffect(() => {
+    focusInputEnd();
+  }, []);
+
+  // The tab follows the open chat: "New Chat - Data Agent" on /chat/new and
+  // "<session title> - Data Agent" on a session. Route metadata cannot cover
+  // the session case -- the title is fetched in the browser.
+  useEffect(() => {
+    document.title = documentTitle(currentSessionTitle);
+  }, [currentSessionTitle]);
+
   if (!userId) return null;
 
   const loadSessionFromBackend = async (id: string) => {
@@ -174,9 +231,14 @@ export default function ChatView({
 
       justLoadedRef.current = true;
 
+      setRevealIndex(null);
       setMessages(session.messages);
       setCurrentSessionTitle(session.title);
       setSidebarOpen(false);
+
+      // Opening another chat from the sidebar keeps this component mounted,
+      // so the box has to be swapped over to that chat's draft by hand.
+      restoreDraft(readDraft(session.id));
     } catch (e) {
       console.error("Error loading session:", e);
       setIsBackendError(true);
@@ -187,11 +249,12 @@ export default function ChatView({
     ownSessionRef.current = null;
 
     setSessionId("");
+    setRevealIndex(null);
     setMessages([]);
-    setInput("");
+    restoreDraft(readDraft(""));
     setAttachedFile(null);
     setFileError("");
-    setCurrentSessionTitle("New Chat");
+    setCurrentSessionTitle(NEW_CHAT_TITLE);
     setSidebarOpen(false);
 
     window.history.replaceState(null, "", "/chat/new");
@@ -262,7 +325,7 @@ export default function ChatView({
 
     const currentFile = attachedFile;
 
-    setInput("");
+    applyInput("");
     setAttachedFile(null);
     setFileError("");
 
@@ -308,6 +371,8 @@ export default function ChatView({
 
     shouldPinRef.current = true;
 
+    // Whatever was typing itself out before this send is finished with.
+    setRevealIndex(null);
     setMessages(historyWithUserMessage);
 
     try {
@@ -324,7 +389,7 @@ export default function ChatView({
       form.append(
         "messages",
         JSON.stringify(
-          historyWithUserMessage.map(({ image, ...rest }) => rest),
+          historyWithUserMessage.map(({ image, artifact, ...rest }) => rest),
         ),
       );
 
@@ -347,6 +412,8 @@ export default function ChatView({
 
       const updatedMessages = [...historyWithUserMessage, assistantMessage];
 
+      // The reply is here in full; the reveal only decides how it lands.
+      setRevealIndex(historyWithUserMessage.length);
       setMessages(updatedMessages);
     } catch (error) {
       console.error("Error sending message:", error);
@@ -385,6 +452,7 @@ export default function ChatView({
           session && (await loadSessionFromBackend(session.id))
         }
         onNewSession={startNewChat}
+        onCurrentSessionTitleChange={setCurrentSessionTitle}
         className={`${sidebarOpen ? "block" : "hidden"} md:block`}
       />
 
@@ -417,36 +485,27 @@ export default function ChatView({
           <div className="max-w-3xl mx-auto space-y-2">
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-center space-y-6">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-slate-500 to-slate-600 flex items-center justify-center">
-                  <Sparkles className="w-8 h-8 text-white" />
-                </div>
-
-                <div className="space-y-2">
-                  <h2 className="text-2xl font-bold text-foreground">
-                    Welcome to Data Agent
-                  </h2>
-
-                  <p className="text-muted-foreground max-w-md">
-                    Start a conversation by typing a message below.
-                  </p>
-                </div>
+                <h2 className="text-3xl font-normal text-heading-foreground">
+                  무엇을 도와드릴까요?
+                </h2>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg w-full">
                   {suggestedQuestions.map((sq, index) => (
                     <Card
                       key={index}
-                      className="p-4 hover:bg-accent cursor-pointer transition-colors border-border/40"
-                      onClick={() => setInput(sq.question)}
+                      className="gap-2 p-4 hover:bg-accent cursor-pointer transition-colors border-tile-border shadow-none"
+                      onClick={() => {
+                        applyInput(sq.question);
+                        focusInputEnd();
+                      }}
                     >
-                      <div className="flex items-center space-x-2">
-                        {getIcon(sq.icon)}
-
+                      <div className="flex items-center">
                         <span className="text-base font-medium">
                           {sq.title}
                         </span>
                       </div>
 
-                      <p className="text-sm text-muted-foreground mt-1 text-left">
+                      <p className="text-sm text-muted-foreground text-left">
                         {sq.question}
                       </p>
                     </Card>
@@ -458,7 +517,13 @@ export default function ChatView({
                 {messages.map((message, index) => (
                   <div
                     key={index}
-                    ref={index === lastUserIndex ? pinnedMessageRef : undefined}
+                    ref={
+                      index === lastUserIndex
+                        ? pinnedMessageRef
+                        : index === revealIndex
+                          ? revealingMessageRef
+                          : undefined
+                    }
                     style={
                       index === lastUserIndex
                         ? {
@@ -470,6 +535,7 @@ export default function ChatView({
                     <MessageItem
                       message={message}
                       isLast={index === messages.length - 1}
+                      reveal={index === revealIndex}
                     />
                   </div>
                 ))}
@@ -482,28 +548,10 @@ export default function ChatView({
                     <div className="flex-1 max-w-[80%]">
                       <Card className="p-4 shadow-sm bg-transparent border-0 shadow-none">
                         <div className="flex items-center space-x-2">
-                          <div className="flex space-x-1">
-                            <div
-                              className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
-                              style={{
-                                animationDelay: "0ms",
-                              }}
-                            />
-
-                            <div
-                              className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
-                              style={{
-                                animationDelay: "150ms",
-                              }}
-                            />
-
-                            <div
-                              className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
-                              style={{
-                                animationDelay: "300ms",
-                              }}
-                            />
-                          </div>
+                          <LoaderCircle
+                            className="w-4 h-4 text-muted-foreground animate-spin"
+                            aria-hidden
+                          />
 
                           <span className="text-sm text-muted-foreground">
                             Thinking...
@@ -551,13 +599,9 @@ export default function ChatView({
                 ref={inputRef}
                 value={input}
                 onChange={(e) => {
-                  setInput(e.target.value);
+                  applyInput(e.target.value);
 
-                  const el = e.target;
-
-                  el.style.height = "auto";
-
-                  el.style.height = `${Math.min(el.scrollHeight, 15 * 24)}px`;
+                  fitToText(e.target);
                 }}
                 onKeyPress={handleKeyPress}
                 placeholder={
@@ -616,8 +660,9 @@ export default function ChatView({
                 <Button
                   onClick={handleSend}
                   disabled={isSending || (!input.trim() && !attachedFile)}
+                  variant="ghost"
                   size="icon"
-                  className="h-9 w-9 bg-gradient-to-br from-slate-500 to-slate-600 hover:from-slate-400 hover:to-slate-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                  className="h-9 w-9 rounded-full text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <Send className="w-4 h-4" />
 

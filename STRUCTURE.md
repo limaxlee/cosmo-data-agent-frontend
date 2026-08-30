@@ -125,7 +125,6 @@ src/
 │   └── user-provider.tsx         # UserProvider + useUser
 │
 └── lib/                          # non-React modules only
-    ├── chat-export.ts            # export a chat as JSON / Markdown / text
     ├── session-api.ts            # HTTP client for the ADK session endpoints
     ├── types.ts                  # Message, ChatSession
     └── utils.ts                  # cn() — DO NOT MOVE (see gotchas)
@@ -152,15 +151,16 @@ for debugging.
 
 ### Path A — session management: browser → ADK backend **directly**
 
-All four live in [`src/lib/session-api.ts`](src/lib/session-api.ts) on the
+All five live in [`src/lib/session-api.ts`](src/lib/session-api.ts) on the
 `SessionStorage` class. These run **in the browser**, bypassing Next entirely.
 
 | Method | HTTP call | Defined at | Called from |
 |---|---|---|---|
-| `createSession(userId)` | `POST {API_BASE}/apps/users/{userId}/sessions` | [session-api.ts:176](src/lib/session-api.ts#L176) | [chat-view.tsx:280](src/components/chat/chat-view.tsx#L280) — on first message |
-| `listSessions(userId)` | `GET {API_BASE}/apps/users/{userId}/sessions` | [session-api.ts:209](src/lib/session-api.ts#L209) | [session-sidebar.tsx:68](src/components/chat/session-sidebar.tsx#L68) — polls every 5s |
-| `getSession(userId, id)` | `GET {API_BASE}/apps/users/{userId}/sessions/{id}` | [session-api.ts:239](src/lib/session-api.ts#L239) | [chat-view.tsx:171](src/components/chat/chat-view.tsx#L171) — on opening a chat |
-| `deleteSession(userId, id)` | `DELETE {API_BASE}/apps/users/{userId}/sessions/{id}` | [session-api.ts:263](src/lib/session-api.ts#L263) | [session-sidebar.tsx:115](src/components/chat/session-sidebar.tsx#L115) |
+| `createSession(userId)` | `POST {API_BASE}/apps/users/{userId}/sessions` | [session-api.ts:185](src/lib/session-api.ts#L185) | [chat-view.tsx:280](src/components/chat/chat-view.tsx#L280) — on first message |
+| `listSessions(userId)` | `GET {API_BASE}/apps/users/{userId}/sessions` | [session-api.ts:218](src/lib/session-api.ts#L218) | [session-sidebar.tsx:102](src/components/chat/session-sidebar.tsx#L102) — polls every 5s |
+| `getSession(userId, id)` | `GET {API_BASE}/apps/users/{userId}/sessions/{id}` | [session-api.ts:248](src/lib/session-api.ts#L248) | [chat-view.tsx:171](src/components/chat/chat-view.tsx#L171) — on opening a chat |
+| `renameSession(userId, id, title)` | `PATCH {API_BASE}/apps/users/{userId}/sessions/{id}/title?session_title=...` | [session-api.ts:272](src/lib/session-api.ts#L272) | [session-sidebar.tsx:240](src/components/chat/session-sidebar.tsx#L240) — Rename in the session menu |
+| `deleteSession(userId, id)` | `DELETE {API_BASE}/apps/users/{userId}/sessions/{id}` | [session-api.ts:296](src/lib/session-api.ts#L296) | [session-sidebar.tsx:167](src/components/chat/session-sidebar.tsx#L167) |
 
 > **These require CORS.** Because the browser calls the backend directly, the ADK
 > server must send `Access-Control-Allow-Origin` for this app's origin, and the
@@ -462,8 +462,6 @@ contains your backend host — would be committed by `git add .`. To fix, uncomm
 
 ### Known rough edges
 
-- The session menu item labelled **"Rename"** actually calls
-  `handleExport(..., "json")` — [session-sidebar.tsx:341](src/components/chat/session-sidebar.tsx#L341)
 - `isLoading` / `error` are set in the sidebar but never rendered, so a failed load
   shows **"No conversations yet"** instead of an error
 - `SessionStorage` (the class in `session-api.ts`) is an HTTP client despite the

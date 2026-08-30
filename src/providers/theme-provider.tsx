@@ -1,6 +1,12 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
 type Theme = "dark" | "light" | "system";
 type ThemeProviderContext = {
@@ -32,38 +38,55 @@ export function ThemeProvider({
   defaultTheme = "system",
   storageKey = "theme",
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(defaultTheme);
-  const [actualTheme, setActualTheme] = useState<"dark" | "light">("dark");
-
-  useEffect(() => {
-    const storedTheme = localStorage.getItem(storageKey) as Theme;
-    if (storedTheme) {
-      setTheme(storedTheme);
+  // Read straight from storage on the first client render, so the theme the
+  // pre-paint script already applied is never briefly replaced by the default.
+  const [theme, setThemeState] = useState<Theme>(() => {
+    if (typeof window === "undefined") return defaultTheme;
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored === "dark" || stored === "light" || stored === "system") {
+        return stored;
+      }
+    } catch {
+      // Storage unavailable (private mode, blocked cookies) - use the default.
     }
-  }, [storageKey]);
+    return defaultTheme;
+  });
+
+  const [actualTheme, setActualTheme] = useState<"dark" | "light">(() => {
+    if (typeof document === "undefined") return "light";
+    return document.documentElement.getAttribute("data-theme") === "dark"
+      ? "dark"
+      : "light";
+  });
+
+  // Only a real choice is persisted. Writing on every mount would clobber the
+  // stored value with the default before it had been read back.
+  const setTheme = useCallback(
+    (next: Theme) => {
+      try {
+        localStorage.setItem(storageKey, next);
+      } catch {
+        // Non-fatal: the theme still applies for this page.
+      }
+      setThemeState(next);
+    },
+    [storageKey],
+  );
 
   useEffect(() => {
     const root = window.document.documentElement;
 
-    root.removeAttribute("data-theme");
-
-    let effectiveTheme: "dark" | "light";
-
-    if (theme === "system") {
-      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
-        .matches
-        ? "dark"
-        : "light";
-      effectiveTheme = systemTheme;
-    } else {
-      effectiveTheme = theme;
-    }
+    const effectiveTheme: "dark" | "light" =
+      theme === "system"
+        ? window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light"
+        : theme;
 
     setActualTheme(effectiveTheme);
     root.setAttribute("data-theme", effectiveTheme);
-
-    localStorage.setItem(storageKey, theme);
-  }, [theme, storageKey]);
+  }, [theme]);
 
   useEffect(() => {
     if (theme !== "system") return;

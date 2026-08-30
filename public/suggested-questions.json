@@ -1,22 +1,22 @@
 [
   {
-    "title": "Get Started",
-    "question": "What are your capabilities?",
+    "title": "시작하기",
+    "question": "어떤 기능을 사용할 수 있나요?",
     "icon": "MessageSquare"
   },
   {
-    "title": "Check inspection status",
-    "question": "Show me inspection status from the past 7 days",
+    "title": "검사 현황 확인",
+    "question": "최근 7일간의 검사 현황을 보여주세요.",
     "icon": "Bot"
   },
   {
-    "title": "Sample a dataset",
-    "question": "Can you sample a dataset?",
+    "title": "데이터 샘플링",
+    "question": "데이터를 샘플링해 줄 수 있나요?",
     "icon": "Sparkles"
   },
   {
-    "title": "Check inspection models",
-    "question": "What kind of models are deployed on sites?",
+    "title": "검사 모델 확인",
+    "question": "법인에 배포된 모델은 어떤 것들이 있나요?",
     "icon": "Send"
   }
 ]

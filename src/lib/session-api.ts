@@ -1,10 +1,29 @@
-import { ChatSession, Message } from "./types";
+import { ChatSession, Message, MessageArtifact } from "./types";
 
 // Relative on purpose. Requests go to this app's own origin and are
 // forwarded to the ADK backend by src/app/backend/[...path]/route.ts, which
 // keeps every call same-origin -- no CORS, and no backend host baked into
 // the client bundle at build time.
 const API_BASE = "/backend";
+
+// The one field on the backend's RenameSessionRequest. The route declares the
+// model with `Depends()`, so FastAPI reads it from the query string rather than
+// a JSON body -- the same shape as the `/run?query=` call. It matches the
+// state key the title is read back out of in mapApiSession() below.
+const RENAME_TITLE_PARAM = "session_title";
+
+// The one field on the backend's LoadSessionArtifactRequest. Declared with
+// `Depends()` as well, so it travels in the query string.
+const ARTIFACT_DATA_URI_PARAM = "data_uri";
+
+// A user turn that carried a file arrives as two text parts: this header block,
+// then whatever the user typed. The header is metadata, not speech, so it gets
+// lifted out and becomes the bubble's attachment rather than being printed.
+const ARTIFACT_MARKER = "uploaded artifact:";
+
+const ARTIFACT_FILENAME = /^[ \t]*Filename:[ \t]*(.+)$/im;
+const ARTIFACT_DATA_URI = /^[ \t]*Data uri:[ \t]*(.+)$/im;
+const ARTIFACT_CONTENT_TYPE = /^[ \t]*Content type:[ \t]*(.+)$/im;
 
 interface ApiSession {
   session_id: string;
@@ -55,7 +74,48 @@ function inlineImageDataUrl(part: ApiPart | undefined): string | undefined {
   return `data:${mime};base64,${blob.data}`;
 }
 
-function mapApiSessionDetail(data: ApiSessionDetail): ChatSession {
+function artifactUrl(
+  userId: string,
+  sessionId: string,
+  dataUri: string,
+): string {
+  const params = new URLSearchParams({ [ARTIFACT_DATA_URI_PARAM]: dataUri });
+
+  return `${API_BASE}/apps/users/${encodeURIComponent(
+    userId,
+  )}/sessions/${encodeURIComponent(sessionId)}/artifact?${params.toString()}`;
+}
+
+// Read an "Uploaded Artifact:" header block. Anything else -- ordinary message
+// text, a header with no data URI, a non-image upload -- comes back null and is
+// left to render as text.
+function parseUploadedArtifact(
+  text: string | null | undefined,
+  userId: string,
+  sessionId: string,
+): MessageArtifact | null {
+  const body = (text ?? "").trimStart();
+
+  if (!body.toLowerCase().startsWith(ARTIFACT_MARKER)) return null;
+
+  const dataUri = body.match(ARTIFACT_DATA_URI)?.[1]?.trim();
+  if (!dataUri) return null;
+
+  // Only an image has anywhere to go in the bubble.
+  const mimeType = body.match(ARTIFACT_CONTENT_TYPE)?.[1]?.trim() ?? "";
+  if (!mimeType.toLowerCase().startsWith("image/")) return null;
+
+  return {
+    url: artifactUrl(userId, sessionId, dataUri),
+    filename: body.match(ARTIFACT_FILENAME)?.[1]?.trim(),
+    mimeType,
+  };
+}
+
+function mapApiSessionDetail(
+  data: ApiSessionDetail,
+  userId: string,
+): ChatSession {
   const events = data.events ?? [];
 
   const messages: Message[] = events
@@ -67,13 +127,17 @@ function mapApiSessionDetail(data: ApiSessionDetail): ChatSession {
         (p) => (p?.text ?? "").trim().length > 0 && !p?.thought,
       );
 
-      const text = (textParts[textParts.length - 1]?.text ?? "").trim();
-
       const role: Message["role"] =
         event.author === "user" ? "user" : "assistant";
 
-      // Only user messages may carry an attached inline image.
+      // Only user messages may carry an attachment.
       let image: string | undefined;
+      let artifact: MessageArtifact | undefined;
+
+      // The text parts still in the running to become the bubble's content. An
+      // upload header is taken out of it, so the message the user actually
+      // typed is the one left at the end.
+      let spokenParts = textParts;
 
       if (role === "user") {
         const blobPart = parts.find(
@@ -81,16 +145,34 @@ function mapApiSessionDetail(data: ApiSessionDetail): ChatSession {
         );
 
         image = inlineImageDataUrl(blobPart);
+
+        const headerIndex = textParts.findLastIndex(
+          (p) => parseUploadedArtifact(p?.text, userId, data.id) !== null,
+        );
+
+        if (headerIndex !== -1) {
+          artifact =
+            parseUploadedArtifact(
+              textParts[headerIndex]?.text,
+              userId,
+              data.id,
+            ) ?? undefined;
+
+          spokenParts = textParts.filter((_, i) => i !== headerIndex);
+        }
       }
 
-      // Keep the message if it has text or (for a user) an image.
-      if (!text && !image) return null;
+      const text = (spokenParts[spokenParts.length - 1]?.text ?? "").trim();
+
+      // Keep the message if it has text or (for a user) an attachment.
+      if (!text && !image && !artifact) return null;
 
       return {
         role,
         content: text,
         timestamp: event.timestamp ? new Date(event.timestamp) : undefined,
         image,
+        artifact,
       };
     })
     .filter((m): m is Message => m !== null);
@@ -261,7 +343,50 @@ export class SessionStorage {
 
     const data = await res.json();
 
-    return mapApiSessionDetail(data);
+    return mapApiSessionDetail(data, userId);
+  }
+
+  /**
+   * Fetches one stored artifact -- the file a user attached to an earlier turn.
+   * The response body is the raw file, so it comes back as a Blob for the
+   * caller to turn into an object URL.
+   */
+  static async loadArtifact(url: string): Promise<Blob> {
+    const res = await fetch(url, {
+      headers: {
+        Accept: "image/*",
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to load artifact: ${res.status}`);
+    }
+
+    return res.blob();
+  }
+
+  static async renameSession(
+    userId: string,
+    sessionId: string,
+    title: string,
+  ): Promise<void> {
+    const params = new URLSearchParams({ [RENAME_TITLE_PARAM]: title });
+
+    const res = await fetch(
+      `${API_BASE}/apps/users/${encodeURIComponent(
+        userId,
+      )}/sessions/${encodeURIComponent(sessionId)}/title?${params.toString()}`,
+      {
+        method: "PATCH",
+        headers: {
+          Accept: "application/json",
+        },
+      },
+    );
+
+    if (!res.ok) {
+      throw new Error(`Failed to rename session: ${res.status}`);
+    }
   }
 
   static async deleteSession(userId: string, sessionId: string): Promise<void> {

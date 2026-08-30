@@ -5,6 +5,12 @@ import ReactMarkdown from "react-markdown";
 
 import { useEffect, useState } from "react";
 import { Message } from "@/lib/types";
+import { copyText } from "@/lib/clipboard";
+import { SessionStorage } from "@/lib/session-api";
+import { markdownToPlainText } from "@/lib/markdown-text";
+import { guardPartialMarkdown } from "@/lib/markdown-stream";
+import { rehypeRevealWords } from "@/lib/rehype-reveal-words";
+import { useWordReveal } from "@/components/chat/use-word-reveal";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Check, Copy, RefreshCw } from "lucide-react";
@@ -20,6 +26,11 @@ interface MessageItemProps {
   message: Message;
   isLast: boolean;
   onRegenerate?: () => void;
+
+  // Set by ChatView on the one reply that just came back, so it types itself
+  // out instead of appearing whole. Messages read back from a session never
+  // get it -- opening an old chat should not replay its answers.
+  reveal?: boolean;
 }
 
 function dataUrlToObjectUrl(src?: string): string | null {
@@ -59,14 +70,22 @@ export function MessageItem({
   message,
   isLast,
   onRegenerate,
+  reveal = false,
 }: MessageItemProps) {
   const [copied, setCopied] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const [imgLoading, setImgLoading] = useState(false);
 
   const handleCopy = async () => {
     try {
-      const content = message.content || "";
-      await navigator.clipboard.writeText(content);
+      const raw = message.content || "";
+
+      // User messages render as plain text already; only assistant messages
+      // go through the markdown renderer, so only those need stripping.
+      const content =
+        message.role === "user" ? raw : markdownToPlainText(raw);
+
+      await copyText(content);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
@@ -83,15 +102,88 @@ export function MessageItem({
 
   const isUser = message.role === "user";
 
+  // Inline on a just-sent message, a stored artifact on restored history.
+  const hasAttachment = !!message.image || !!message.artifact;
+
+  // Only ever true for the newest reply. Everything else -- user messages,
+  // reloaded history, the error bubble -- takes the straight path below.
+  const isRevealing = reveal && !isUser;
+
+  const revealed = useWordReveal(formatContent(message.content), isRevealing);
+
+  // A prefix of Markdown is not itself Markdown, so the tail gets closed off
+  // before the renderer sees it. See markdown-stream.ts.
+  const markdown = isRevealing ? guardPartialMarkdown(revealed) : revealed;
+
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
+
+  // Restored history points at a stored artifact instead of carrying the bytes,
+  // so the URL is what the effect keys on -- not the object it belongs to,
+  // which is rebuilt on every load.
+  const artifactUrl = message.artifact?.url;
+
   useEffect(() => {
-    const url = dataUrlToObjectUrl(message.image);
-    setObjectUrl(url);
-    setImgError(url === null && !!message.image);
+    // A message the user just sent has the file inline as a data URL. Nothing
+    // to fetch: decode it and be done.
+    const inline = dataUrlToObjectUrl(message.image);
+
+    if (inline) {
+      setObjectUrl(inline);
+      setImgError(false);
+      setImgLoading(false);
+
+      return () => URL.revokeObjectURL(inline);
+    }
+
+    // Inline data was there but would not decode.
+    if (message.image) {
+      setObjectUrl(null);
+      setImgError(true);
+      setImgLoading(false);
+
+      return;
+    }
+
+    if (!artifactUrl) {
+      setObjectUrl(null);
+      setImgError(false);
+      setImgLoading(false);
+
+      return;
+    }
+
+    // Restored attachment: the bubble renders its text right away and the
+    // image arrives on its own, one request per attachment.
+    let created: string | null = null;
+    let cancelled = false;
+
+    setObjectUrl(null);
+    setImgError(false);
+    setImgLoading(true);
+
+    SessionStorage.loadArtifact(artifactUrl)
+      .then((blob) => {
+        if (cancelled) return;
+
+        created = URL.createObjectURL(blob);
+
+        setObjectUrl(created);
+        setImgLoading(false);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+
+        console.error("Attached artifact failed to load:", error);
+
+        setImgError(true);
+        setImgLoading(false);
+      });
+
     return () => {
-      if (url) URL.revokeObjectURL(url);
+      cancelled = true;
+      if (created) URL.revokeObjectURL(created);
     };
-  }, [message.image]);
+  }, [message.image, artifactUrl]);
 
   const messageDate = message.timestamp ?? new Date();
   const now = new Date();
@@ -134,15 +226,17 @@ export function MessageItem({
                       {formatContent(message.content)}
                     </p>
                   )}
-                  {message.image &&
-                    (imgError || !objectUrl ? (
+                  {hasAttachment &&
+                    (imgLoading ? (
+                      <div className="h-48 w-full max-w-[18.75rem] animate-pulse rounded-lg border border-border/40 bg-muted/60" />
+                    ) : imgError || !objectUrl ? (
                       <div className="rounded-md border border-border/40 px-3 py-2 text-xs text-muted-foreground">
                         Preview unavailable
                       </div>
                     ) : (
                       <img
                         src={objectUrl}
-                        alt="Attached image"
+                        alt={message.artifact?.filename ?? "Attached image"}
                         onError={() => setImgError(true)}
                         className="max-h-80 max-w-full w-auto rounded-lg border border-border/40 object-contain"
                       />
@@ -151,6 +245,7 @@ export function MessageItem({
               ) : (
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
+                  rehypePlugins={isRevealing ? [rehypeRevealWords] : undefined}
                   components={{
                     p: ({ children }) => (
                       <p className="leading-7 mb-4 last:mb-0">{children}</p>
@@ -238,7 +333,7 @@ export function MessageItem({
                     hr: () => <hr className="my-6 border-border" />,
                   }}
                 >
-                  {formatContent(message.content)}
+                  {markdown}
                 </ReactMarkdown>
               )}
             </div>

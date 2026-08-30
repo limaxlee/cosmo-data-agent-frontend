@@ -16,11 +16,26 @@
   --secondary-foreground: 218 14% 11%;
   --muted: 220 20% 94%;
   --muted-foreground: 216 10% 40%;
-  --accent: 216 23% 91%;
+  /* Empty-state greeting. Tracks the tile titles (--card-foreground),
+     a shade deeper so the greeting still leads. */
+  --heading-foreground: 218 14% 8%;
+  /* Hover fill. Must stay distinct from --card and --input, which back the
+     sidebar rows, the dropdown menus and the theme toggle. */
+  --accent: 216 22% 85%;
   --accent-foreground: 218 14% 11%;
+  /* Open session in the sidebar. Neutral by design, so it leans on the
+     semibold title to stay distinct from --accent when hovered. */
+  --selected: 215 20% 88%;
+  --selected-foreground: 218 14% 11%;
   --destructive: 0 72% 45%;
   --destructive-foreground: 220 23% 98%;
   --border: 217 16% 90%;
+  /* Suggested-question tiles. A touch stronger than --border so the outline
+     stays readable, but soft enough not to box the tiles in. */
+  --tile-border: 217 14% 86%;
+  /* Sidebar edge. Matches --border here; the dark value is the one that
+     needed taming. */
+  --sidebar-border: 217 16% 87%;
   /* Raised surface: shared by the composer and the user message bubble */
   --input: 217 22% 93%;
   --ring: 220 84% 48%;
@@ -41,11 +56,24 @@
     --secondary-foreground: 210 20% 98%;
     --muted: 215 28% 17%;
     --muted-foreground: 217 11% 65%;
-    --accent: 215 28% 17%;
+    /* Empty-state greeting. Tracks the tile titles (--card-foreground),
+       a shade brighter so the greeting still leads. */
+    --heading-foreground: 210 20% 100%;
+    /* Hover fill - lighter than both --card and the zinc-800 menu surface. */
+    --accent: 215 18% 27%;
     --accent-foreground: 210 20% 98%;
+    /* Open session in the sidebar - see the light block. */
+    --selected: 215 14% 24%;
+    --selected-foreground: 210 20% 98%;
     --destructive: 0 63% 31%;
     --destructive-foreground: 210 20% 98%;
     --border: 240 4.8% 83.9%;
+    /* Suggested-question tiles. Sits further off the surface than the light
+       value: a lighter-than-background edge reads softer per step. */
+    --tile-border: 240 4% 26%;
+    /* Sidebar edge. --border is near-white in dark and glares against the
+       surface, so the divider gets its own restrained value. */
+    --sidebar-border: 240 4% 20%;
     --input: 215 27% 35%;
     --ring: 216 34% 17%;
   }
@@ -65,11 +93,24 @@
   --secondary-foreground: 210 20% 98%;
   --muted: 215 28% 17%;
   --muted-foreground: 217 11% 65%;
-  --accent: 215 28% 17%;
+  /* Empty-state greeting. Tracks the tile titles (--card-foreground),
+     a shade brighter so the greeting still leads. */
+  --heading-foreground: 210 20% 100%;
+  /* Hover fill - lighter than both --card and the zinc-800 menu surface. */
+  --accent: 215 18% 27%;
   --accent-foreground: 210 20% 98%;
+  /* Open session in the sidebar - see the light block. */
+  --selected: 215 14% 24%;
+  --selected-foreground: 210 20% 98%;
   --destructive: 0 63% 31%;
   --destructive-foreground: 210 20% 98%;
   --border: 240 4.8% 83.9%;
+  /* Suggested-question tiles. Sits further off the surface than the light
+     value: a lighter-than-background edge reads softer per step. */
+  --tile-border: 240 4% 26%;
+  /* Sidebar edge. --border is near-white in dark and glares against the
+     surface, so the divider gets its own restrained value. */
+  --sidebar-border: 240 4% 20%;
   --input: 215 27% 35%;
   --ring: 216 34% 17%;
 }
@@ -88,11 +129,26 @@
   --secondary-foreground: 218 14% 11%;
   --muted: 220 20% 94%;
   --muted-foreground: 216 10% 40%;
-  --accent: 216 23% 91%;
+  /* Empty-state greeting. Tracks the tile titles (--card-foreground),
+     a shade deeper so the greeting still leads. */
+  --heading-foreground: 218 14% 8%;
+  /* Hover fill. Must stay distinct from --card and --input, which back the
+     sidebar rows, the dropdown menus and the theme toggle. */
+  --accent: 216 22% 85%;
   --accent-foreground: 218 14% 11%;
+  /* Open session in the sidebar. Neutral by design, so it leans on the
+     semibold title to stay distinct from --accent when hovered. */
+  --selected: 215 20% 88%;
+  --selected-foreground: 218 14% 11%;
   --destructive: 0 72% 45%;
   --destructive-foreground: 220 23% 98%;
   --border: 217 16% 90%;
+  /* Suggested-question tiles. A touch stronger than --border so the outline
+     stays readable, but soft enough not to box the tiles in. */
+  --tile-border: 217 14% 86%;
+  /* Sidebar edge. Matches --border here; the dark value is the one that
+     needed taming. */
+  --sidebar-border: 217 16% 87%;
   /* Raised surface: shared by the composer and the user message bubble */
   --input: 217 22% 93%;
   --ring: 220 84% 48%;
@@ -111,11 +167,16 @@
   --color-secondary-foreground: hsl(var(--secondary-foreground));
   --color-muted: hsl(var(--muted));
   --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-heading-foreground: hsl(var(--heading-foreground));
   --color-accent: hsl(var(--accent));
   --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-selected: hsl(var(--selected));
+  --color-selected-foreground: hsl(var(--selected-foreground));
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
   --color-border: hsl(var(--border));
+  --color-tile-border: hsl(var(--tile-border));
+  --color-sidebar-border: hsl(var(--sidebar-border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
   --color-chart-1: hsl(var(--chart-1));
@@ -129,7 +190,35 @@
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* One word of a reply that is still typing itself out. The spans are built by
+   rehype-reveal-words.ts, which also sets each one's animation-delay -- always
+   negative, so a word revealed a moment ago is already past the end of its own
+   animation and paints at rest. The message re-renders on every new word, and
+   that is what stops the finished words fading in all over again.
+
+   Only a `from` keyframe: the end state is the element's own style, so once the
+   animation is over no filter or transform is left behind. */
+.reveal-word {
+  display: inline-block;
+  overflow-wrap: break-word;
+  animation: reveal-word 380ms cubic-bezier(0.22, 0.7, 0.3, 1) backwards;
+}
+
+@keyframes reveal-word {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+    transform: translateY(2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal-word {
+    animation: none;
+  }
 }

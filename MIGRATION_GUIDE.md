@@ -53,8 +53,11 @@ repository"* — that is expected.
 | `.gitignore` | Tells git what never to commit |
 | `.env.example` | Template of required env vars — safe to commit |
 | `.env` | Your **real** local values. Copy the file, but see Part 4 |
+| `Dockerfile` | Multi-stage production image — without it there is nothing to deploy |
+| `run_da_frontend.sh` | The `docker run` line, with the port and `BACKEND_ORIGIN` already set |
 | `README.md` | Project readme |
 | `STRUCTURE.md` | Your architecture notes |
+| `DEPLOY.md` | How to build and run the container on the server |
 
 For reference, the full `src/` tree that must come across:
 
@@ -62,16 +65,20 @@ For reference, the full `src/` tree that must come across:
 src/
   app/
     api/chat/route.ts
+    backend/[...path]/route.ts
     chat/[sessionId]/page.tsx
     chat/new/page.tsx
     fonts/InterVariable.woff2
     fonts/InterVariable-Italic.woff2
     globals.css
+    icon.svg
     layout.tsx
   components/
     chat/chat-view.tsx
     chat/message-item.tsx
     chat/session-sidebar.tsx
+    chat/use-follow-reveal.ts
+    chat/use-word-reveal.ts
     ui/button.tsx
     ui/card.tsx
     ui/dropdown-menu.tsx
@@ -80,10 +87,16 @@ src/
     ui/sheet.tsx
     ui/switch.tsx
     ui/tooltip.tsx
+    data-agent-wordmark.tsx
     theme-toggle.tsx
     user-gate.tsx
   lib/
-    chat-export.ts
+    app-title.ts
+    clipboard.ts
+    draft-storage.ts
+    markdown-stream.ts
+    markdown-text.ts
+    rehype-reveal-words.ts
     session-api.ts
     types.ts
     utils.ts
@@ -94,6 +107,12 @@ src/
 
 > The two `.woff2` font files are binary — copy them with File Explorer or `robocopy`,
 > never by opening and pasting their contents.
+
+> `app/backend/[...path]/route.ts` is the one to double-check. It is the proxy that
+> forwards every `/backend/*` call to the ADK backend, so leaving it behind makes the
+> app build and start normally and then 404 on every session, message and attachment.
+> The square brackets in the folder name are literal — they are Next.js catch-all
+> syntax, not a placeholder to fill in.
 
 ### Do NOT copy these
 
@@ -177,9 +196,12 @@ Starts Next.js in dev mode (with Turbopack) at **<http://localhost:3000>**. It
 hot-reloads — save a file and the browser updates itself. Leave it running while you
 work; press `Ctrl+C` in the terminal to stop it.
 
-> Requires `.env` to exist with `NEXT_PUBLIC_API_BASE_URL` pointing at your backend,
-> otherwise chat requests will fail. `NEXT_PUBLIC_*` variables are read at build/start
-> time, so restart `npm run dev` after editing `.env`.
+> Requires `.env` to exist with `BACKEND_ORIGIN` pointing at your ADK backend (no
+> trailing slash), otherwise every chat request fails. It is read server-side on each
+> request — the browser never sees it — but `.env` itself is only loaded when the dev
+> server boots, so restart `npm run dev` after editing it. The same goes for
+> `NEXT_PUBLIC_APP_TITLE` and `NEXT_PUBLIC_MAX_INPUT_LENGTH`, which Next.js inlines
+> into the client bundle at build time.
 
 ### 3. Check for code errors (optional)
 
