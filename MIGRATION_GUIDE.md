@@ -96,7 +96,6 @@ src/
     draft-storage.ts
     markdown-stream.ts
     markdown-text.ts
-    rehype-reveal-words.ts
     session-api.ts
     types.ts
     utils.ts

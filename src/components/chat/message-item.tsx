@@ -1,7 +1,7 @@
 "use client";
 
 import remarkGfm from "remark-gfm";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type Components } from "react-markdown";
 
 import { useEffect, useState } from "react";
 import { Message } from "@/lib/types";
@@ -9,7 +9,6 @@ import { copyText } from "@/lib/clipboard";
 import { SessionStorage } from "@/lib/session-api";
 import { markdownToPlainText } from "@/lib/markdown-text";
 import { guardPartialMarkdown } from "@/lib/markdown-stream";
-import { rehypeRevealWords } from "@/lib/rehype-reveal-words";
 import { useWordReveal } from "@/components/chat/use-word-reveal";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,6 +31,85 @@ interface MessageItemProps {
   // get it -- opening an old chat should not replay its answers.
   reveal?: boolean;
 }
+
+const REMARK_PLUGINS = [remarkGfm];
+
+// Handed to react-markdown as the element types it renders, so the map must
+// keep its identity across renders: rebuilt inline, every renderer would be a
+// new component type and React would tear down and remount the whole message
+// DOM on each chat re-render -- one per keystroke in the box.
+const markdownComponents: Components = {
+  p: ({ children }) => <p className="leading-7 mb-4 last:mb-0">{children}</p>,
+  h1: ({ children }) => (
+    <h1 className="text-2xl font-semibold mt-6 mb-3 first:mt-0">{children}</h1>
+  ),
+  h2: ({ children }) => (
+    <h2 className="text-xl font-semibold mt-6 mb-3 first:mt-0">{children}</h2>
+  ),
+  h3: ({ children }) => (
+    <h3 className="text-lg font-semibold mt-5 mb-2 first:mt-0">{children}</h3>
+  ),
+  ul: ({ children }) => (
+    <ul className="list-disc pl-6 mb-4 space-y-2 marker:text-muted-foreground">
+      {children}
+    </ul>
+  ),
+  ol: ({ children }) => (
+    <ol className="list-decimal pl-6 mb-4 space-y-2 marker:text-muted-foreground">
+      {children}
+    </ol>
+  ),
+  li: ({ children }) => <li className="leading-7 pl-1">{children}</li>,
+  blockquote: ({ children }) => (
+    <blockquote className="border-l-2 border-border pl-4 italic text-muted-foreground my-4">
+      {children}
+    </blockquote>
+  ),
+  a: ({ children, href }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="underline underline-offset-2 hover:text-foreground"
+    >
+      {children}
+    </a>
+  ),
+  code: ({ className, children, ...props }) => {
+    const isBlock = /language-(\w+)/.test(className || "");
+    return isBlock ? (
+      <code className={className} {...props}>
+        {children}
+      </code>
+    ) : (
+      <code className="rounded bg-muted px-1.5 py-0.5 text-sm font-mono">
+        {children}
+      </code>
+    );
+  },
+  pre: ({ children }) => (
+    <pre className="bg-muted rounded-lg p-4 overflow-x-auto my-4 text-sm">
+      {children}
+    </pre>
+  ),
+  table: ({ children }) => (
+    <div className="overflow-x-auto my-4">
+      <table className="w-full border-collapse text-sm">{children}</table>
+    </div>
+  ),
+  th: ({ children }) => (
+    <th className="border border-border px-3 py-2 text-left font-semibold">
+      {children}
+    </th>
+  ),
+  td: ({ children }) => (
+    <td className="border border-border px-3 py-2">{children}</td>
+  ),
+  strong: ({ children }) => (
+    <strong className="font-semibold">{children}</strong>
+  ),
+  hr: () => <hr className="my-6 border-border" />,
+};
 
 function dataUrlToObjectUrl(src?: string): string | null {
   if (!src) return null;
@@ -244,94 +322,8 @@ export function MessageItem({
                 </div>
               ) : (
                 <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  rehypePlugins={isRevealing ? [rehypeRevealWords] : undefined}
-                  components={{
-                    p: ({ children }) => (
-                      <p className="leading-7 mb-4 last:mb-0">{children}</p>
-                    ),
-                    h1: ({ children }) => (
-                      <h1 className="text-2xl font-semibold mt-6 mb-3 first:mt-0">
-                        {children}
-                      </h1>
-                    ),
-                    h2: ({ children }) => (
-                      <h2 className="text-xl font-semibold mt-6 mb-3 first:mt-0">
-                        {children}
-                      </h2>
-                    ),
-                    h3: ({ children }) => (
-                      <h3 className="text-lg font-semibold mt-5 mb-2 first:mt-0">
-                        {children}
-                      </h3>
-                    ),
-                    ul: ({ children }) => (
-                      <ul className="list-disc pl-6 mb-4 space-y-2 marker:text-muted-foreground">
-                        {children}
-                      </ul>
-                    ),
-                    ol: ({ children }) => (
-                      <ol className="list-decimal pl-6 mb-4 space-y-2 marker:text-muted-foreground">
-                        {children}
-                      </ol>
-                    ),
-                    li: ({ children }) => (
-                      <li className="leading-7 pl-1">{children}</li>
-                    ),
-                    blockquote: ({ children }) => (
-                      <blockquote className="border-l-2 border-border pl-4 italic text-muted-foreground my-4">
-                        {children}
-                      </blockquote>
-                    ),
-                    a: ({ children, href }) => (
-                      <a
-                        href={href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline underline-offset-2 hover:text-foreground"
-                      >
-                        {children}
-                      </a>
-                    ),
-                    code: ({ className, children, ...props }) => {
-                      const isBlock = /language-(\w+)/.test(className || "");
-                      return isBlock ? (
-                        <code className={className} {...props}>
-                          {children}
-                        </code>
-                      ) : (
-                        <code className="rounded bg-muted px-1.5 py-0.5 text-sm font-mono">
-                          {children}
-                        </code>
-                      );
-                    },
-                    pre: ({ children }) => (
-                      <pre className="bg-muted rounded-lg p-4 overflow-x-auto my-4 text-sm">
-                        {children}
-                      </pre>
-                    ),
-                    table: ({ children }) => (
-                      <div className="overflow-x-auto my-4">
-                        <table className="w-full border-collapse text-sm">
-                          {children}
-                        </table>
-                      </div>
-                    ),
-                    th: ({ children }) => (
-                      <th className="border border-border px-3 py-2 text-left font-semibold">
-                        {children}
-                      </th>
-                    ),
-                    td: ({ children }) => (
-                      <td className="border border-border px-3 py-2">
-                        {children}
-                      </td>
-                    ),
-                    strong: ({ children }) => (
-                      <strong className="font-semibold">{children}</strong>
-                    ),
-                    hr: () => <hr className="my-6 border-border" />,
-                  }}
+                  remarkPlugins={REMARK_PLUGINS}
+                  components={markdownComponents}
                 >
                   {markdown}
                 </ReactMarkdown>

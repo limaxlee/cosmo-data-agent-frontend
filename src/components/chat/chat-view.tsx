@@ -3,7 +3,7 @@
 import { Message } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import { useUser } from "@/providers/user-provider";
-import { Send, Paperclip, X, LoaderCircle } from "lucide-react";
+import { Send, Paperclip, X, LoaderCircle, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect, useRef } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -20,7 +20,6 @@ interface SuggestedQuestion {
   question: string;
   icon: string;
 }
-
 const IMAGE_EXTENSIONS = [
   ".jpg",
   ".jpeg",
@@ -481,33 +480,49 @@ export default function ChatView({
         </header>
 
         {/* Messages area */}
-        <ScrollArea className="flex-1 min-h-0 p-4" ref={scrollAreaRef}>
-          <div className="max-w-3xl mx-auto space-y-2">
+        {/* This pane runs from the header down to the composer, so centering
+            inside it puts the empty state midway between the top and the
+            textarea -- not the window. Radix wraps children in an auto-height
+            display:table div, which is what the >div>div reaches: without it
+            no h-full below ever resolves. */}
+        <ScrollArea
+          className={`flex-1 min-h-0 p-4 ${
+            messages.length === 0 ? "[&>div>div]:!h-full" : ""
+          }`}
+          ref={scrollAreaRef}
+        >
+          <div
+            className={`max-w-4xl mx-auto ${
+              messages.length === 0 ? "h-full" : "space-y-2"
+            }`}
+          >
             {messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-center space-y-6">
-                <h2 className="text-3xl font-normal text-heading-foreground">
+              /* min-h-full, not h-full: on a short window the box may grow
+                 past the pane and scroll instead of clipping the heading. */
+              <div className="flex flex-col items-center justify-center min-h-full text-center space-y-6">
+                <h2 className="text-5xl font-normal text-heading-foreground">
                   무엇을 도와드릴까요?
                 </h2>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg w-full">
+                <div className="flex w-full max-w-2xl flex-col gap-2">
                   {suggestedQuestions.map((sq, index) => (
                     <Card
                       key={index}
-                      className="gap-2 p-4 hover:bg-accent cursor-pointer transition-colors border-tile-border shadow-none"
+                      className="group flex-row items-center gap-3 px-4 py-3 hover:bg-accent cursor-pointer transition-colors border-tile-border shadow-none"
                       onClick={() => {
                         applyInput(sq.question);
                         focusInputEnd();
                       }}
                     >
-                      <div className="flex items-center">
-                        <span className="text-base font-medium">
-                          {sq.title}
-                        </span>
-                      </div>
+                      <span className="flex-none text-lg font-medium">
+                        {sq.title}
+                      </span>
 
-                      <p className="text-sm text-muted-foreground text-left">
+                      <p className="min-w-0 flex-1 truncate text-left text-base text-muted-foreground">
                         {sq.question}
                       </p>
+
+                      <ChevronRight className="h-4 w-4 flex-none text-muted-foreground opacity-50 transition-all group-hover:translate-x-0.5 group-hover:opacity-100" />
                     </Card>
                   ))}
                 </div>
@@ -576,7 +591,7 @@ export default function ChatView({
 
         {/* Input area */}
         <div className="bg-background p-4">
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-4xl mx-auto">
             {/* Hidden native file input (single file, image types only) */}
             <input
               ref={fileInputRef}

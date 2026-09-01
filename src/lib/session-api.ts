@@ -21,9 +21,9 @@ const ARTIFACT_DATA_URI_PARAM = "data_uri";
 // lifted out and becomes the bubble's attachment rather than being printed.
 const ARTIFACT_MARKER = "uploaded artifact:";
 
-const ARTIFACT_FILENAME = /^[ \t]*Filename:[ \t]*(.+)$/im;
-const ARTIFACT_DATA_URI = /^[ \t]*Data uri:[ \t]*(.+)$/im;
-const ARTIFACT_CONTENT_TYPE = /^[ \t]*Content type:[ \t]*(.+)$/im;
+const ARTIFACT_FILENAME = /^[ \t]*filename:[ \t]*(.+)$/im;
+const ARTIFACT_DATA_URI = /^[ \t]*data_uri:[ \t]*(.+)$/im;
+const ARTIFACT_CONTENT_TYPE = /^[ \t]*content_type:[ \t]*(.+)$/im;
 
 interface ApiSession {
   session_id: string;
@@ -56,8 +56,10 @@ interface ApiEvent {
   timestamp: string | null;
 }
 
+// The id is deliberately absent: the endpoints disagree on what to call it
+// (the list gives `session_id`, the detail may not echo one at all), so the
+// mapper is handed the id the caller requested instead of reading it back.
 interface ApiSessionDetail {
-  id: string;
   state: Record<string, unknown>;
   events: ApiEvent[] | null;
   last_update_time: string;
@@ -115,6 +117,9 @@ function parseUploadedArtifact(
 function mapApiSessionDetail(
   data: ApiSessionDetail,
   userId: string,
+  // The id the session was fetched by. It is what the artifact URLs are built
+  // with, so it must be the real thing -- not whatever the response echoes.
+  sessionId: string,
 ): ChatSession {
   const events = data.events ?? [];
 
@@ -147,7 +152,7 @@ function mapApiSessionDetail(
         image = inlineImageDataUrl(blobPart);
 
         const headerIndex = textParts.findLastIndex(
-          (p) => parseUploadedArtifact(p?.text, userId, data.id) !== null,
+          (p) => parseUploadedArtifact(p?.text, userId, sessionId) !== null,
         );
 
         if (headerIndex !== -1) {
@@ -155,7 +160,7 @@ function mapApiSessionDetail(
             parseUploadedArtifact(
               textParts[headerIndex]?.text,
               userId,
-              data.id,
+              sessionId,
             ) ?? undefined;
 
           spokenParts = textParts.filter((_, i) => i !== headerIndex);
@@ -185,10 +190,10 @@ function mapApiSessionDetail(
   const title =
     typeof stateTitle === "string" && stateTitle.trim()
       ? stateTitle.trim()
-      : data.id;
+      : sessionId;
 
   return {
-    id: data.id,
+    id: sessionId,
     title,
     messages,
     createdAt: updatedAt,
@@ -343,7 +348,7 @@ export class SessionStorage {
 
     const data = await res.json();
 
-    return mapApiSessionDetail(data, userId);
+    return mapApiSessionDetail(data, userId, sessionId);
   }
 
   /**

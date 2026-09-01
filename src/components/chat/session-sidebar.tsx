@@ -102,6 +102,8 @@ export function SessionSidebar({
    */
   const renameStartedRef = useRef(false);
 
+  const renameInputRef = useRef<HTMLInputElement | null>(null);
+
   const router = useRouter();
 
   const loadSessions = useCallback(async () => {
@@ -142,6 +144,26 @@ export function SessionSidebar({
     }, 150);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  /* Windows-style rename: the whole title starts selected, ready to be typed
+     over. One frame late on purpose -- the closing dropdown is still moving
+     focus around as the box mounts, and a select done synchronously can be
+     undone under it. Keyed on the id, so a refocus mid-edit doesn't re-select
+     what the user already narrowed down. */
+  useEffect(() => {
+    if (!renamingId) return;
+
+    const id = requestAnimationFrame(() => {
+      const el = renameInputRef.current;
+
+      if (!el) return;
+
+      el.focus();
+      el.select();
+    });
+
+    return () => cancelAnimationFrame(id);
+  }, [renamingId]);
 
   const filteredSessions = sessions.filter((session) =>
     session.title.toLowerCase().includes(debouncedSearchQuery.toLowerCase()),
@@ -421,6 +443,7 @@ export function SessionSidebar({
                               <div className="flex-1 min-w-0">
                                 {isRenaming ? (
                                   <input
+                                    ref={renameInputRef}
                                     autoFocus
                                     value={renameValue}
                                     onChange={(e) =>
@@ -428,7 +451,6 @@ export function SessionSidebar({
                                     }
                                     onKeyDown={handleRenameKeyDown}
                                     onBlur={() => handleRenameBlur(session)}
-                                    onFocus={(e) => e.currentTarget.select()}
                                     onClick={(e) => e.stopPropagation()}
                                     aria-label="Rename chat"
                                     /* Selection colours borrowed from the

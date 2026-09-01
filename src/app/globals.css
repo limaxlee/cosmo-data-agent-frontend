@@ -194,31 +194,3 @@ body {
   color: hsl(var(--foreground));
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
-
-/* One word of a reply that is still typing itself out. The spans are built by
-   rehype-reveal-words.ts, which also sets each one's animation-delay -- always
-   negative, so a word revealed a moment ago is already past the end of its own
-   animation and paints at rest. The message re-renders on every new word, and
-   that is what stops the finished words fading in all over again.
-
-   Only a `from` keyframe: the end state is the element's own style, so once the
-   animation is over no filter or transform is left behind. */
-.reveal-word {
-  display: inline-block;
-  overflow-wrap: break-word;
-  animation: reveal-word 380ms cubic-bezier(0.22, 0.7, 0.3, 1) backwards;
-}
-
-@keyframes reveal-word {
-  from {
-    opacity: 0;
-    filter: blur(4px);
-    transform: translateY(2px);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .reveal-word {
-    animation: none;
-  }
-}
