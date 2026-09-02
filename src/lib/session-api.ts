@@ -15,6 +15,8 @@ const RENAME_TITLE_PARAM = "session_title";
 // The one field on the backend's LoadSessionArtifactRequest. Declared with
 // `Depends()` as well, so it travels in the query string.
 const ARTIFACT_DATA_URI_PARAM = "data_uri";
+const ARTIFACT_FILENAME_PARAM = "filename";
+const ARTIFACT_MEDIA_TYPE_PARAM = "media_type";
 
 // A user turn that carried a file arrives as two text parts: this header block,
 // then whatever the user typed. The header is metadata, not speech, so it gets
@@ -80,8 +82,14 @@ function artifactUrl(
   userId: string,
   sessionId: string,
   dataUri: string,
+  filename: string,
+  mediaType: string,
 ): string {
-  const params = new URLSearchParams({ [ARTIFACT_DATA_URI_PARAM]: dataUri });
+  const params = new URLSearchParams({
+    [ARTIFACT_DATA_URI_PARAM]: dataUri,
+    [ARTIFACT_FILENAME_PARAM]: filename,
+    [ARTIFACT_MEDIA_TYPE_PARAM]: mediaType,
+  });
 
   return `${API_BASE}/apps/users/${encodeURIComponent(
     userId,
@@ -101,14 +109,17 @@ function parseUploadedArtifact(
   if (!body.toLowerCase().startsWith(ARTIFACT_MARKER)) return null;
 
   const dataUri = body.match(ARTIFACT_DATA_URI)?.[1]?.trim();
+  const filename = body.match(ARTIFACT_FILENAME)?.[1]?.trim();
   if (!dataUri) return null;
+
+  if (!filename) return null;
 
   // Only an image has anywhere to go in the bubble.
   const mimeType = body.match(ARTIFACT_CONTENT_TYPE)?.[1]?.trim() ?? "";
   if (!mimeType.toLowerCase().startsWith("image/")) return null;
 
   return {
-    url: artifactUrl(userId, sessionId, dataUri),
+    url: artifactUrl(userId, sessionId, dataUri, filename, mimeType),
     filename: body.match(ARTIFACT_FILENAME)?.[1]?.trim(),
     mimeType,
   };

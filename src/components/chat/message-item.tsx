@@ -160,8 +160,7 @@ export function MessageItem({
 
       // User messages render as plain text already; only assistant messages
       // go through the markdown renderer, so only those need stripping.
-      const content =
-        message.role === "user" ? raw : markdownToPlainText(raw);
+      const content = message.role === "user" ? raw : markdownToPlainText(raw);
 
       await copyText(content);
       setCopied(true);
@@ -187,11 +186,17 @@ export function MessageItem({
   // reloaded history, the error bubble -- takes the straight path below.
   const isRevealing = reveal && !isUser;
 
-  const revealed = useWordReveal(formatContent(message.content), isRevealing);
+  const content = formatContent(message.content);
+  const revealed = useWordReveal(content, isRevealing);
 
   // A prefix of Markdown is not itself Markdown, so the tail gets closed off
-  // before the renderer sees it. See markdown-stream.ts.
-  const markdown = isRevealing ? guardPartialMarkdown(revealed) : revealed;
+  // before the renderer sees it. See markdown-stream.ts. Only while the text
+  // is actually partial: the guard drops a trailing table row, which must come
+  // back once the reveal has run its course.
+  const markdown =
+    isRevealing && revealed.length < content.length
+      ? guardPartialMarkdown(revealed)
+      : revealed;
 
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
 
@@ -308,7 +313,7 @@ export function MessageItem({
                     (imgLoading ? (
                       <div className="h-48 w-full max-w-[18.75rem] animate-pulse rounded-lg border border-border/40 bg-muted/60" />
                     ) : imgError || !objectUrl ? (
-                      <div className="rounded-md border border-border/40 px-3 py-2 text-xs text-muted-foreground">
+                      <div className="rounded-md border border-muted-foreground/25 dark:border-border/40 px-3 py-2 text-xs text-muted-foreground">
                         Preview unavailable
                       </div>
                     ) : (
