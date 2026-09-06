@@ -42,7 +42,6 @@ export function useFollowReveal(
 
     if (!viewport || !message) return;
 
-    let following = true;
     let lastTop = viewport.scrollTop;
 
     // How far the bottom of the reply sits past the bottom of the pane. Zero or
@@ -50,6 +49,11 @@ export function useFollowReveal(
     const overflow = () =>
       message.getBoundingClientRect().bottom -
       (viewport.getBoundingClientRect().bottom - STICK_PADDING);
+
+    // Only a reader who is already at the reply gets carried along. One who
+    // had scrolled up before it landed keeps their place, the same as if they
+    // had scrolled up during it.
+    let following = overflow() <= RESUME_SLACK;
 
     const onScroll = () => {
       const top = viewport.scrollTop;

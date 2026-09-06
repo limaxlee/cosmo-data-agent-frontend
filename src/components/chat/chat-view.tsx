@@ -14,12 +14,24 @@ import { useFollowReveal } from "@/components/chat/use-follow-reveal";
 import { SessionStorage } from "@/lib/session-api";
 import { readDraft, writeDraft } from "@/lib/draft-storage";
 import { NEW_CHAT_TITLE, documentTitle } from "@/lib/app-title";
+import { ERROR_REPLY } from "@/lib/error-reply";
 
 interface SuggestedQuestion {
   title: string;
   question: string;
   icon: string;
 }
+// A session opened while its last turn is still the user's is one whose reply
+// is on its way -- the request was sent from another page of this tab, or
+// from another tab. The view waits for it the way it waits after a send, and
+// asks the backend again at this interval until the reply is there.
+const REPLY_POLL_INTERVAL_MS = 3000;
+
+// How long a turn is waited on before it is given up as one that will never be
+// answered -- a run that died without leaving an error event behind. Also the
+// age past which a session is opened as finished rather than waited on.
+const REPLY_WAIT_LIMIT_MS = 10 * 60 * 1000;
+
 const IMAGE_EXTENSIONS = [
   ".jpg",
   ".jpeg",
@@ -70,6 +82,12 @@ export default function ChatView({
   // came back. Null everywhere else, so history read back from a session
   // renders instantly the way it always has.
   const [revealIndex, setRevealIndex] = useState<number | null>(null);
+
+  // The session whose reply is being polled for, once it was opened with the
+  // user's turn still unanswered. Null when nothing is being waited on.
+  const [awaitingSessionId, setAwaitingSessionId] = useState<string | null>(
+    null,
+  );
   const [currentSessionTitle, setCurrentSessionTitle] = useState(
     initialSessionId ? "" : NEW_CHAT_TITLE,
   );
@@ -220,6 +238,70 @@ export default function ChatView({
     document.title = documentTitle(currentSessionTitle);
   }, [currentSessionTitle]);
 
+  // Leaves the waiting state entered by loadSessionFromBackend, if any. A send
+  // in flight from this instance is not touched -- that keeps its own flag.
+  const stopAwaitingReply = () => {
+    if (!awaitingSessionId) return;
+
+    setAwaitingSessionId(null);
+    setIsSending(false);
+  };
+
+  // Polls the backend while a session is waited on. The poll touches no state
+  // until the reply is there, so nothing on screen moves between polls; then
+  // the reply lands exactly as it does after a send.
+  useEffect(() => {
+    if (!awaitingSessionId || !userId) return;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const startedAt = Date.now();
+
+    const tick = async () => {
+      try {
+        const session = await SessionStorage.getSession(
+          userId,
+          awaitingSessionId,
+        );
+
+        if (cancelled) return;
+
+        const last = session.messages[session.messages.length - 1];
+
+        if (last && last.role !== "user") {
+          // The reply is here in full; the reveal only decides how it lands.
+          setRevealIndex(session.messages.length - 1);
+          setMessages(session.messages);
+          setAwaitingSessionId(null);
+          setIsSending(false);
+
+          return;
+        }
+      } catch (e) {
+        console.error("Error polling session:", e);
+      }
+
+      if (cancelled) return;
+
+      if (Date.now() - startedAt >= REPLY_WAIT_LIMIT_MS) {
+        setAwaitingSessionId(null);
+        setIsSending(false);
+
+        return;
+      }
+
+      timer = setTimeout(tick, REPLY_POLL_INTERVAL_MS);
+    };
+
+    timer = setTimeout(tick, REPLY_POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [awaitingSessionId, userId]);
+
   if (!userId) return null;
 
   const loadSessionFromBackend = async (id: string) => {
@@ -235,6 +317,19 @@ export default function ChatView({
       setCurrentSessionTitle(session.title);
       setSidebarOpen(false);
 
+      // A user turn with nothing after it is still being answered, unless it is
+      // so old that no answer is coming. Waiting looks the same as after a
+      // send: spinner, "Thinking...", and the box held until the reply lands.
+      const last = session.messages[session.messages.length - 1];
+
+      const unanswered =
+        last?.role === "user" &&
+        (!last.timestamp ||
+          Date.now() - last.timestamp.getTime() < REPLY_WAIT_LIMIT_MS);
+
+      setAwaitingSessionId(unanswered ? session.id : null);
+      setIsSending(unanswered);
+
       // Opening another chat from the sidebar keeps this component mounted,
       // so the box has to be swapped over to that chat's draft by hand.
       restoreDraft(readDraft(session.id));
@@ -246,6 +341,8 @@ export default function ChatView({
 
   const startNewChat = () => {
     ownSessionRef.current = null;
+
+    stopAwaitingReply();
 
     setSessionId("");
     setRevealIndex(null);
@@ -419,7 +516,7 @@ export default function ChatView({
 
       const errorMessage: Message = {
         role: "assistant",
-        content: "Sorry, I encountered an error. Please try again.",
+        content: ERROR_REPLY,
         timestamp: new Date(),
       };
 
@@ -555,9 +652,6 @@ export default function ChatView({
                   </div>
                 ))}
 
-                {/* Sentinel: scroll target when opening an existing session */}
-                <div ref={endOfMessagesRef} aria-hidden />
-
                 {isSending && (
                   <div className="flex items-start space-x-3">
                     <div className="flex-1 max-w-[80%]">
@@ -576,6 +670,11 @@ export default function ChatView({
                     </div>
                   </div>
                 )}
+
+                {/* Sentinel: scroll target when opening an existing session.
+                    Sits under the spinner so a session opened mid-reply
+                    scrolls to the "Thinking..." line, not just above it. */}
+                <div ref={endOfMessagesRef} aria-hidden />
 
                 {/* Spacer so the pinned question can reach the top */}
                 <div

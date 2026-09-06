@@ -1,4 +1,5 @@
 import { ChatSession, Message, MessageArtifact } from "./types";
+import { ERROR_REPLY } from "./error-reply";
 
 // Relative on purpose. Requests go to this app's own origin and are
 // forwarded to the ADK backend by src/app/backend/[...path]/route.ts, which
@@ -52,10 +53,25 @@ interface ApiPart {
   inlineData?: ApiBlob | null;
 }
 
+// An event that ended in an error carries the code and message instead of
+// content. Field names may arrive in snake_case or camelCase depending on the
+// backend serializer, so both are allowed.
 interface ApiEvent {
   content: { parts: ApiPart[] | null; role: string } | null;
   author: string;
   timestamp: string | null;
+  error_code?: string | null;
+  errorCode?: string | null;
+  error_message?: string | null;
+  errorMessage?: string | null;
+}
+
+// Whether the backend recorded this event as a failure.
+function isErrorEvent(event: ApiEvent): boolean {
+  return (
+    (event.error_code ?? event.errorCode ?? null) !== null ||
+    (event.error_message ?? event.errorMessage ?? null) !== null
+  );
 }
 
 // The id is deliberately absent: the endpoints disagree on what to call it
@@ -180,13 +196,23 @@ function mapApiSessionDetail(
 
       const text = (spokenParts[spokenParts.length - 1]?.text ?? "").trim();
 
-      // Keep the message if it has text or (for a user) an attachment.
-      if (!text && !image && !artifact) return null;
+      const timestamp = event.timestamp ? new Date(event.timestamp) : undefined;
+
+      // A failed turn has no text of its own. It is printed as the same line
+      // the user saw when the request failed, so the turn reads as answered
+      // and reopening the session does not wait for a reply that never comes.
+      if (!text && !image && !artifact) {
+        if (role === "assistant" && isErrorEvent(event)) {
+          return { role, content: ERROR_REPLY, timestamp };
+        }
+
+        return null;
+      }
 
       return {
         role,
         content: text,
-        timestamp: event.timestamp ? new Date(event.timestamp) : undefined,
+        timestamp,
         image,
         artifact,
       };
