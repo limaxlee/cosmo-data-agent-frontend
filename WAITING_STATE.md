@@ -13,6 +13,42 @@
 
 ---
 
+## Revision 2026-09-13: `run_state` from the backend
+
+The session API now returns `run_state: "idle" | "running"` on `SessionInfo`.
+The view no longer infers a run in progress from "last message is the user's";
+it reads the flag instead.
+
+| File | Change |
+|---|---|
+| `src/lib/types.ts` | `ChatSession.isRunning: boolean`. |
+| `src/lib/session-api.ts` | `run_state?` on `ApiSession` and `ApiSessionDetail`; both mappers set `isRunning: run_state === "running"`. A backend without the field reads as idle. |
+| `src/components/chat/chat-view.tsx` | Open: wait iff `session.isRunning`. Poll: end iff `!session.isRunning`. |
+
+What changed in behavior:
+
+- **Open.** Waiting is entered when `isRunning` is true. The age check on the
+  last user message is gone; the backend is the source of truth.
+- **Poll end.** The first poll returning `isRunning: false` ends the wait. If
+  the last message is the assistant's, it is revealed and types out as before.
+  If it is not (the run went idle without appending a reply or an error
+  event), a `Sorry, I encountered an error. Please try again.` bubble is added
+  locally and revealed instead. The bubble is not persisted.
+- **Give-up limit.** `REPLY_WAIT_LIMIT_MS` (10 minutes) is kept as a safety
+  net for a run the backend never reports as finished. When it expires the
+  same "Sorry..." bubble is appended and the input unlocks.
+
+Backend ordering requirement: the GET that first returns `idle` must already
+contain the final assistant event. If `run_state` flips to idle before the
+event is appended, the view shows the "Sorry..." bubble and the real reply
+appears only on the next load of the session.
+
+The "last message is the user's" prerequisite and the sub-agent-text caveat in
+sections 1 and 7 below no longer apply. Sections 4d and 4e show the original
+code; see the file for the current version.
+
+---
+
 ## 1. Behavior
 
 ### Before

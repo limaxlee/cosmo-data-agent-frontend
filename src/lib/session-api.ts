@@ -28,6 +28,10 @@ const ARTIFACT_FILENAME = /^[ \t]*filename:[ \t]*(.+)$/im;
 const ARTIFACT_DATA_URI = /^[ \t]*data_uri:[ \t]*(.+)$/im;
 const ARTIFACT_CONTENT_TYPE = /^[ \t]*content_type:[ \t]*(.+)$/im;
 
+// Whether the backend is still producing a reply for the session. Optional so
+// that a backend without the field reads as idle.
+type ApiRunState = "idle" | "running";
+
 interface ApiSession {
   session_id: string;
   app_name: string;
@@ -35,6 +39,7 @@ interface ApiSession {
   state: Record<string, unknown>;
   events: unknown[];
   last_update_time: string;
+  run_state?: ApiRunState;
 }
 
 // An inline binary blob (e.g. an image the user attached). When serialized to
@@ -81,6 +86,7 @@ interface ApiSessionDetail {
   state: Record<string, unknown>;
   events: ApiEvent[] | null;
   last_update_time: string;
+  run_state?: ApiRunState;
 }
 
 // Pull an image data URL out of a part's inline_data blob, if present.
@@ -235,6 +241,7 @@ function mapApiSessionDetail(
     messages,
     createdAt: updatedAt,
     updatedAt,
+    isRunning: data.run_state === "running",
   };
 }
 
@@ -297,6 +304,7 @@ function mapApiSession(api: ApiSession): ChatSession {
     messages: [],
     createdAt: updatedAt,
     updatedAt,
+    isRunning: api.run_state === "running",
   };
 }
 

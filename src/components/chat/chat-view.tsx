@@ -267,12 +267,26 @@ export default function ChatView({
 
         if (cancelled) return;
 
-        const last = session.messages[session.messages.length - 1];
+        if (!session.isRunning) {
+          const last = session.messages[session.messages.length - 1];
 
-        if (last && last.role !== "user") {
+          // A run that ended without leaving a reply behind is shown the same
+          // line as a request that failed in this tab.
+          const messages =
+            last?.role === "assistant"
+              ? session.messages
+              : [
+                  ...session.messages,
+                  {
+                    role: "assistant" as const,
+                    content: ERROR_REPLY,
+                    timestamp: new Date(),
+                  },
+                ];
+
           // The reply is here in full; the reveal only decides how it lands.
-          setRevealIndex(session.messages.length - 1);
-          setMessages(session.messages);
+          setRevealIndex(messages.length - 1);
+          setMessages(messages);
           setAwaitingSessionId(null);
           setIsSending(false);
 
@@ -285,6 +299,12 @@ export default function ChatView({
       if (cancelled) return;
 
       if (Date.now() - startedAt >= REPLY_WAIT_LIMIT_MS) {
+        // Given up on a run the backend never reported as finished. Shown
+        // the same line as a run that ended with no reply.
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: ERROR_REPLY, timestamp: new Date() },
+        ]);
         setAwaitingSessionId(null);
         setIsSending(false);
 
@@ -317,18 +337,11 @@ export default function ChatView({
       setCurrentSessionTitle(session.title);
       setSidebarOpen(false);
 
-      // A user turn with nothing after it is still being answered, unless it is
-      // so old that no answer is coming. Waiting looks the same as after a
-      // send: spinner, "Thinking...", and the box held until the reply lands.
-      const last = session.messages[session.messages.length - 1];
-
-      const unanswered =
-        last?.role === "user" &&
-        (!last.timestamp ||
-          Date.now() - last.timestamp.getTime() < REPLY_WAIT_LIMIT_MS);
-
-      setAwaitingSessionId(unanswered ? session.id : null);
-      setIsSending(unanswered);
+      // The backend says whether a reply is still on its way. Waiting looks
+      // the same as after a send: spinner, "Thinking...", and the box held
+      // until the reply lands.
+      setAwaitingSessionId(session.isRunning ? session.id : null);
+      setIsSending(session.isRunning);
 
       // Opening another chat from the sidebar keeps this component mounted,
       // so the box has to be swapped over to that chat's draft by hand.

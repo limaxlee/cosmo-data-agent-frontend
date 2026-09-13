@@ -64,19 +64,3 @@ USER node
 EXPOSE 13080
 
 CMD ["node", "server.js"]
-
-
-
-
-except Exception as e:
-    logger.exception(...)
-    session = await self._session_service.get_session(
-        app_name=self._app_name, user_id=user_id, session_id=session_id
-    )
-    if session:
-        await self._session_service.append_event(session, Event(
-            author=EventAuthors.SYSTEM,
-            error_code="LLM_ERROR",
-            error_message=str(e),
-        ))
-    raise
