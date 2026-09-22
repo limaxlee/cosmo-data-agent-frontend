@@ -25,7 +25,4 @@ export interface ChatSession {
   messages: Message[];
   createdAt: Date;
   updatedAt: Date;
-  // True while the backend is still producing a reply for this session. A
-  // session opened in this state is waited on rather than shown as finished.
-  isRunning: boolean;
 }

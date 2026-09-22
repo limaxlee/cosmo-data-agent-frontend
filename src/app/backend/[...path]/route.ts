@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Origin of the ADK backend, resolved at request time so the deployed image can
-// be pointed at a different host with `docker run -e BACKEND_ORIGIN=...`.
 function backendOrigin(): string {
   return (process.env.BACKEND_ORIGIN || "").replace(/\/+$/, "");
 }
 
-// Hop-by-hop and encoding headers that belong to *this* connection. Forwarding
-// them corrupts the response, because fetch has already decoded the body.
 const STRIPPED_RESPONSE_HEADERS = new Set([
   "content-encoding",
   "content-length",
@@ -15,10 +11,6 @@ const STRIPPED_RESPONSE_HEADERS = new Set([
   "connection",
 ]);
 
-// Everything under /backend/* is forwarded to the ADK backend by this handler,
-// so the browser only ever talks to the origin it loaded the page from. That
-// makes every API call same-origin: no preflight, no CORS headers needed on the
-// backend, and no server hostname baked into the client bundle.
 async function proxy(
   req: NextRequest,
   ctx: { params: Promise<{ path: string[] }> },
@@ -33,7 +25,6 @@ async function proxy(
 
   const { path } = await ctx.params;
 
-  // `path` arrives decoded, so re-encode each segment before rebuilding the URL.
   const target = `${origin}/${path.map(encodeURIComponent).join("/")}${
     req.nextUrl.search
   }`;

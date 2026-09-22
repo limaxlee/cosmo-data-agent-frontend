@@ -32,6 +32,10 @@ const REPLY_POLL_INTERVAL_MS = 3000;
 // age past which a session is opened as finished rather than waited on.
 const REPLY_WAIT_LIMIT_MS = 10 * 60 * 1000;
 
+// While a reply is pending the user is waiting, not idle. The login is kept
+// alive at this interval until the reply lands.
+const PENDING_REPLY_KEEP_ALIVE_MS = 60 * 1000;
+
 const IMAGE_EXTENSIONS = [
   ".jpg",
   ".jpeg",
@@ -68,7 +72,7 @@ export default function ChatView({
 }: {
   initialSessionId?: string;
 }) {
-  const { userId } = useUser();
+  const { userId, keepAlive } = useUser();
 
   const [input, setInput] = useState(() => readDraft(initialSessionId ?? ""));
   const [maxLength, setMaxLength] = useState(1000);
@@ -267,26 +271,12 @@ export default function ChatView({
 
         if (cancelled) return;
 
-        if (!session.isRunning) {
-          const last = session.messages[session.messages.length - 1];
+        const last = session.messages[session.messages.length - 1];
 
-          // A run that ended without leaving a reply behind is shown the same
-          // line as a request that failed in this tab.
-          const messages =
-            last?.role === "assistant"
-              ? session.messages
-              : [
-                  ...session.messages,
-                  {
-                    role: "assistant" as const,
-                    content: ERROR_REPLY,
-                    timestamp: new Date(),
-                  },
-                ];
-
+        if (last && last.role !== "user") {
           // The reply is here in full; the reveal only decides how it lands.
-          setRevealIndex(messages.length - 1);
-          setMessages(messages);
+          setRevealIndex(session.messages.length - 1);
+          setMessages(session.messages);
           setAwaitingSessionId(null);
           setIsSending(false);
 
@@ -299,12 +289,6 @@ export default function ChatView({
       if (cancelled) return;
 
       if (Date.now() - startedAt >= REPLY_WAIT_LIMIT_MS) {
-        // Given up on a run the backend never reported as finished. Shown
-        // the same line as a run that ended with no reply.
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: ERROR_REPLY, timestamp: new Date() },
-        ]);
         setAwaitingSessionId(null);
         setIsSending(false);
 
@@ -322,6 +306,14 @@ export default function ChatView({
     };
   }, [awaitingSessionId, userId]);
 
+  // A pending reply counts as activity for the idle logout.
+  useEffect(() => {
+    if (!isSending) return;
+    keepAlive();
+    const timer = setInterval(keepAlive, PENDING_REPLY_KEEP_ALIVE_MS);
+    return () => clearInterval(timer);
+  }, [isSending, keepAlive]);
+
   if (!userId) return null;
 
   const loadSessionFromBackend = async (id: string) => {
@@ -337,11 +329,18 @@ export default function ChatView({
       setCurrentSessionTitle(session.title);
       setSidebarOpen(false);
 
-      // The backend says whether a reply is still on its way. Waiting looks
-      // the same as after a send: spinner, "Thinking...", and the box held
-      // until the reply lands.
-      setAwaitingSessionId(session.isRunning ? session.id : null);
-      setIsSending(session.isRunning);
+      // A user turn with nothing after it is still being answered, unless it is
+      // so old that no answer is coming. Waiting looks the same as after a
+      // send: spinner, "Thinking...", and the box held until the reply lands.
+      const last = session.messages[session.messages.length - 1];
+
+      const unanswered =
+        last?.role === "user" &&
+        (!last.timestamp ||
+          Date.now() - last.timestamp.getTime() < REPLY_WAIT_LIMIT_MS);
+
+      setAwaitingSessionId(unanswered ? session.id : null);
+      setIsSending(unanswered);
 
       // Opening another chat from the sidebar keeps this component mounted,
       // so the box has to be swapped over to that chat's draft by hand.

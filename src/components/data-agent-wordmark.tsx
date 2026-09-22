@@ -1,23 +1,9 @@
 import { APP_TITLE } from "@/lib/app-title";
 
-/**
- * The "dataagent" wordmark, drawn as outlines rather than set in a font so it
- * looks the same wherever it renders. Every glyph fills with `currentColor`,
- * so the colour comes from the `text-*` class on the element -- the sidebar
- * ties it to the same heading colour the "무엇을 도와드릴까요?" greeting uses,
- * which flips with the theme.
- */
-export function DataAgentWordmark({
-  className = "",
-}: {
-  className?: string;
-}) {
+export function DataAgentWordmark({ className = "" }: { className?: string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      /* The export pads the glyphs with uneven space -- ~11 units of air above
-         the ascenders, ~4.5 below the 'g' descender. Cropping to the ink means
-         the SVG box is the mark, so `items-center` centres what you can see. */
       viewBox="0 9 139 29"
       role="img"
       aria-label={APP_TITLE}

@@ -13,6 +13,8 @@ import { ChatSession } from "@/lib/types";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { DataAgentWordmark } from "@/components/data-agent-wordmark";
 import { APP_TITLE } from "@/lib/app-title";
+import Image from "next/image";
+import diceIcon from "@/app/dice_icon.png";
 
 import {
   Tooltip,
@@ -305,9 +307,15 @@ export function SessionSidebar({
               type="button"
               onClick={handleNewSession}
               aria-label={`${APP_TITLE}, new chat`}
-              className="-ml-1 rounded-md px-1 py-1 transition-colors hover:bg-accent outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              className="-ml-1 flex items-center gap-0 rounded-md px-1 py-1 transition-colors hover:bg-accent outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-[hsl(220_23%_97%)] dark:hover:bg-[hsl(216_22%_85%)]"
             >
-              <DataAgentWordmark className="h-6 w-auto shrink-0 text-heading-foreground" />
+              <Image
+                src={diceIcon}
+                alt=""
+                className="h-12 w-auto shrink-0"
+                priority
+              />
+              <DataAgentWordmark className="-ml-2 h-5 w-auto shrink-0 text-heading-foreground dark:text-[hsl(218_14%_8%)]" />
             </button>
           )}
 

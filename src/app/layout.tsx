@@ -19,10 +19,6 @@ const inter = localFont({
 
 export const metadata: Metadata = {
   title: {
-    // The template appends the app name to whatever a page sets ("New Chat").
-    // Routes whose title is only known in the browser -- a session, whose
-    // title comes from a client-side fetch -- render the default until
-    // chat-view rewrites document.title.
     default: APP_TITLE,
     template: `%s - ${APP_TITLE}`,
   },

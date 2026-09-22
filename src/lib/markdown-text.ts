@@ -63,7 +63,10 @@ export function markdownToPlainText(markdown: string): string {
     out.push(stripInline(text));
   }
 
-  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return out
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function stripInline(text: string): string {
