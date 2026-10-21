@@ -13,9 +13,6 @@ export function UserGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const loggedOut = isReady && !userId;
 
-  // A logged-out visitor is always shown the login page at /chat/new, so a
-  // logout (by button or by expiry) on /chat/<id> does not leave that URL
-  // behind for the next login.
   useEffect(() => {
     if (loggedOut && pathname !== "/chat/new") router.replace("/chat/new");
   }, [loggedOut, pathname, router]);

@@ -32,10 +32,6 @@ const REPLY_POLL_INTERVAL_MS = 3000;
 // age past which a session is opened as finished rather than waited on.
 const REPLY_WAIT_LIMIT_MS = 10 * 60 * 1000;
 
-// While a reply is pending the user is waiting, not idle. The login is kept
-// alive at this interval until the reply lands.
-const PENDING_REPLY_KEEP_ALIVE_MS = 60 * 1000;
-
 const IMAGE_EXTENSIONS = [
   ".jpg",
   ".jpeg",
@@ -72,7 +68,7 @@ export default function ChatView({
 }: {
   initialSessionId?: string;
 }) {
-  const { userId, keepAlive } = useUser();
+  const { userId } = useUser();
 
   const [input, setInput] = useState(() => readDraft(initialSessionId ?? ""));
   const [maxLength, setMaxLength] = useState(1000);
@@ -305,14 +301,6 @@ export default function ChatView({
       clearTimeout(timer);
     };
   }, [awaitingSessionId, userId]);
-
-  // A pending reply counts as activity for the idle logout.
-  useEffect(() => {
-    if (!isSending) return;
-    keepAlive();
-    const timer = setInterval(keepAlive, PENDING_REPLY_KEEP_ALIVE_MS);
-    return () => clearInterval(timer);
-  }, [isSending, keepAlive]);
 
   if (!userId) return null;
 
