@@ -27,10 +27,20 @@ interface SuggestedQuestion {
 // asks the backend again at this interval until the reply is there.
 const REPLY_POLL_INTERVAL_MS = 3000;
 
-// How long a turn is waited on before it is given up as one that will never be
-// answered -- a run that died without leaving an error event behind. Also the
-// age past which a session is opened as finished rather than waited on.
-const REPLY_WAIT_LIMIT_MS = 10 * 60 * 1000;
+// A finished run whose last turn is still the user's produced no reply -- it
+// ended without leaving an event behind. The turn is shown the same line a
+// failed send shows, so it reads as answered rather than as still pending.
+// The line is only on screen; nothing is written back to the backend.
+function withMissingReply(messages: Message[]): Message[] {
+  const last = messages[messages.length - 1];
+
+  if (!last || last.role !== "user") return messages;
+
+  return [
+    ...messages,
+    { role: "assistant", content: ERROR_REPLY, timestamp: new Date() },
+  ];
+}
 
 const IMAGE_EXTENSIONS = [
   ".jpg",
@@ -250,29 +260,45 @@ export default function ChatView({
   // Polls the backend while a session is waited on. The poll touches no state
   // until the reply is there, so nothing on screen moves between polls; then
   // the reply lands exactly as it does after a send.
+  // Polls the backend while a session is waited on. Each tick asks only for
+  // the run state, which is cheap; the full session is fetched once, when the
+  // run is over. The poll touches no state until then, so nothing on screen
+  // moves between polls; then the reply lands exactly as it does after a
+  // send. A tick that fails is logged and the next one is scheduled anyway.
   useEffect(() => {
     if (!awaitingSessionId || !userId) return;
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
 
-    const startedAt = Date.now();
-
     const tick = async () => {
       try {
-        const session = await SessionStorage.getSession(
+        const runState = await SessionStorage.getRunState(
           userId,
           awaitingSessionId,
         );
 
         if (cancelled) return;
 
-        const last = session.messages[session.messages.length - 1];
+        if (runState === "idle") {
+          const session = await SessionStorage.getSession(
+            userId,
+            awaitingSessionId,
+          );
 
-        if (last && last.role !== "user") {
-          // The reply is here in full; the reveal only decides how it lands.
-          setRevealIndex(session.messages.length - 1);
-          setMessages(session.messages);
+          if (cancelled) return;
+
+          const last = session.messages[session.messages.length - 1];
+          const replied = last !== undefined && last.role !== "user";
+
+          const messages = replied
+            ? session.messages
+            : withMissingReply(session.messages);
+
+          // A real reply types itself out; the error line for a missing one
+          // just appears, the same as after a failed send.
+          setRevealIndex(replied ? messages.length - 1 : null);
+          setMessages(messages);
           setAwaitingSessionId(null);
           setIsSending(false);
 
@@ -283,13 +309,6 @@ export default function ChatView({
       }
 
       if (cancelled) return;
-
-      if (Date.now() - startedAt >= REPLY_WAIT_LIMIT_MS) {
-        setAwaitingSessionId(null);
-        setIsSending(false);
-
-        return;
-      }
 
       timer = setTimeout(tick, REPLY_POLL_INTERVAL_MS);
     };
@@ -312,23 +331,17 @@ export default function ChatView({
 
       justLoadedRef.current = true;
 
+      const running = session.runState === "running";
+
       setRevealIndex(null);
-      setMessages(session.messages);
+      setMessages(
+        running ? session.messages : withMissingReply(session.messages),
+      );
       setCurrentSessionTitle(session.title);
       setSidebarOpen(false);
 
-      // A user turn with nothing after it is still being answered, unless it is
-      // so old that no answer is coming. Waiting looks the same as after a
-      // send: spinner, "Thinking...", and the box held until the reply lands.
-      const last = session.messages[session.messages.length - 1];
-
-      const unanswered =
-        last?.role === "user" &&
-        (!last.timestamp ||
-          Date.now() - last.timestamp.getTime() < REPLY_WAIT_LIMIT_MS);
-
-      setAwaitingSessionId(unanswered ? session.id : null);
-      setIsSending(unanswered);
+      setAwaitingSessionId(running ? session.id : null);
+      setIsSending(running);
 
       // Opening another chat from the sidebar keeps this component mounted,
       // so the box has to be swapped over to that chat's draft by hand.
@@ -410,6 +423,14 @@ export default function ChatView({
     setIsDragging(false);
 
     acceptFile(e.dataTransfer.files?.[0]);
+  };
+
+  const nameNewSession = async (sessionId: string) => {
+    try {
+      await SessionStorage.createSessionTitle(userId, sessionId);
+    } catch (e) {
+      console.error("Error creating session title:", e);
+    }
   };
 
   const handleSend = async () => {
@@ -508,6 +529,11 @@ export default function ChatView({
 
       const updatedMessages = [...historyWithUserMessage, assistantMessage];
 
+      // A new chat is named after its first exchange, and the reply waits for
+      // that to settle. nameNewSession never throws, so a naming failure
+      // cannot turn a good reply into the error line below.
+      if (isNewSession) await nameNewSession(activeSessionId);
+
       // The reply is here in full; the reveal only decides how it lands.
       setRevealIndex(historyWithUserMessage.length);
       setMessages(updatedMessages);
@@ -519,6 +545,8 @@ export default function ChatView({
         content: ERROR_REPLY,
         timestamp: new Date(),
       };
+
+      if (isNewSession) await nameNewSession(activeSessionId);
 
       setMessages([...historyWithUserMessage, errorMessage]);
     } finally {

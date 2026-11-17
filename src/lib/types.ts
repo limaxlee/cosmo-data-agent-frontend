@@ -19,10 +19,15 @@ export interface Message {
   artifact?: MessageArtifact;
 }
 
+export type RunState = "idle" | "running";
+
 export interface ChatSession {
   id: string;
   title: string;
   messages: Message[];
   createdAt: Date;
   updatedAt: Date;
+  // From the backend's `run_state`. Both the detail and the list endpoint
+  // report it; a backend that omits the field reads as "idle".
+  runState: RunState;
 }

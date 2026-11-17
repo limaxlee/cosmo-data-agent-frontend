@@ -1,4 +1,4 @@
-import { ChatSession, Message, MessageArtifact } from "./types";
+import { ChatSession, Message, MessageArtifact, RunState } from "./types";
 import { ERROR_REPLY } from "./error-reply";
 
 // Relative on purpose. Requests go to this app's own origin and are
@@ -35,6 +35,7 @@ interface ApiSession {
   state: Record<string, unknown>;
   events: unknown[];
   last_update_time: string;
+  run_state?: string | null;
 }
 
 // An inline binary blob (e.g. an image the user attached). When serialized to
@@ -81,6 +82,15 @@ interface ApiSessionDetail {
   state: Record<string, unknown>;
   events: ApiEvent[] | null;
   last_update_time: string;
+  run_state?: string | null;
+}
+
+// The backend's RunState enum, read defensively: anything that is not
+// "running" -- including a missing field from an older backend -- is "idle",
+// so a session is never waited on by mistake. Case-insensitive in case the
+// enum serializes in upper case.
+function parseRunState(value: unknown): RunState {
+  return String(value ?? "").toLowerCase() === "running" ? "running" : "idle";
 }
 
 // Pull an image data URL out of a part's inline_data blob, if present.
@@ -242,6 +252,7 @@ function mapApiSessionDetail(
     messages: collapsed,
     createdAt: updatedAt,
     updatedAt,
+    runState: parseRunState(data.run_state),
   };
 }
 
@@ -304,6 +315,7 @@ function mapApiSession(api: ApiSession): ChatSession {
     messages: [],
     createdAt: updatedAt,
     updatedAt,
+    runState: parseRunState(api.run_state),
   };
 }
 
@@ -395,6 +407,31 @@ export class SessionStorage {
     return mapApiSessionDetail(data, userId, sessionId);
   }
 
+  static async getRunState(
+    userId: string,
+    sessionId: string,
+  ): Promise<RunState> {
+    const res = await fetch(
+      `${API_BASE}/apps/users/${encodeURIComponent(
+        userId,
+      )}/sessions/${encodeURIComponent(sessionId)}/run-state`,
+      {
+        headers: {
+          Accept: "application/json",
+        },
+      },
+    );
+
+    if (!res.ok) {
+      throw new Error(`Failed to load run state: ${res.status}`);
+    }
+
+    const data: { session_id?: string; run_state?: string | null } =
+      await res.json();
+
+    return parseRunState(data.run_state);
+  }
+
   /**
    * Fetches one stored artifact -- the file a user attached to an earlier turn.
    * The response body is the raw file, so it comes back as a Blob for the
@@ -435,6 +472,27 @@ export class SessionStorage {
 
     if (!res.ok) {
       throw new Error(`Failed to rename session: ${res.status}`);
+    }
+  }
+
+  static async createSessionTitle(
+    userId: string,
+    sessionId: string,
+  ): Promise<void> {
+    const res = await fetch(
+      `${API_BASE}/apps/users/${encodeURIComponent(
+        userId,
+      )}/sessions/${encodeURIComponent(sessionId)}/title`,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+        },
+      },
+    );
+
+    if (!res.ok) {
+      throw new Error(`Failed to create session title: ${res.status}`);
     }
   }
 
