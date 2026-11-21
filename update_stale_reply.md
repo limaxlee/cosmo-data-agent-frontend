@@ -1,26 +1,47 @@
 # Update: a reply lands only in the chat it was sent from
 
 **Date:** 2026-11-17
-**Branch / base:** `develop-261116` at `47c9c78 update waiting md files`, plus
-the uncommitted edits from `update_waiting_mechanism.md` and
-`update_session_title.md`. That is the working tree as it stands today.
+**Re-based:** 2026-11-22, onto the code with the DICE single sign-on change.
+**Branch / base:** `develop-261121`: commit `fe881c9 [feat] apply fixes 261117`
+plus the DICE single sign-on change (base path, `apiFetch`, the login check in
+`handleSend`). That is the working tree as it stands on 2026-11-22.
+`update_waiting_mechanism.md` and `update_session_title.md` are already part
+of that code.
 **Status:** not applied. Nothing in `src/` has been changed; this file is the
 instruction set.
 
 The only file touched is `src/components/chat/chat-view.tsx`. Line numbers
-refer to that file as it is in the working tree described above, 834 lines
+refer to that file as it is in the working tree described above, 856 lines
 long, with `update_session_open_blank.md` **not** yet applied. If that
-document has been applied first, add 10 to the numbers in step 1a and 13 to
+document has been applied first, add 10 to the numbers in step 1a and 14 to
 the numbers in steps 1b and 1c; its edits all sit above or below the blocks
 changed here, so nothing else moves. Applying this document first and that one
-second also works, since its anchors are code blocks; its own numbers would
-then be off and should not be trusted.
+second also works; that document gives the numbers for that order.
 
 Within the file, edits are listed top to bottom, so each edit shifts the
 numbers of the ones below it; the shifted numbers are given at each step. The
 "current code" block under every step is copied verbatim from the file and is
 the reliable anchor; search for it rather than trusting the number once you
 have started editing.
+
+**What the re-base changed in this document.** The single sign-on change
+rewrote parts of `handleSend` and one line of `startNewChat`, so this
+document changed in substance, not only in its numbers:
+
+- `handleSend` now has an await before anything else happens: the login check
+  (`loginStillAlive()`). The token is therefore taken above that check, and a
+  send that finds its token retired after the check ends there. This is new;
+  see step 1c-i and the design notes.
+- `setIsSending(true)` moved to the top of `handleSend`, above the login
+  check. Step 1c, which was three sub-edits, is now four: the old first one
+  is split into the top of the function (1c-i) and the session creation
+  (1c-ii).
+- Both `window.history.replaceState` calls carry `BASE_PATH` now. The blocks
+  below keep them as they are in the code.
+- `response.ok` is now checked after the `/api/chat` call, so that item is
+  gone from section 6.
+- Two counts were corrected: the question-bubble edit adds 3 lines (it said
+  2), and `sendTokenRef` appears on twelve lines after the change, not ten.
 
 ---
 
@@ -110,8 +131,19 @@ sent to it, so it is answered, named and listed like any other chat. It is
 just not adopted on screen: the URL stays `/chat/new`, `sessionId` stays
 empty, and the question bubble is not shown in the new chat.
 
+**Clicking New while the login is being checked.** Narrower still: the check
+is instant unless the pass has under a minute left and has to be renewed
+first, which is one request to the login service. If New is clicked in that
+moment, the send ends there. Nothing was cleared, created or sent, and the
+text is still saved as the draft of the chat it was typed in, so it is in the
+box when that chat is on screen again.
+
 **A failed send after New.** The error line is dropped the same way the
 reply is. The failure is still logged.
+
+**The login ends during a send.** Unchanged by this document. The provider
+takes the chat off the screen and sends the browser through the login page;
+the checks added here make no difference to that.
 
 **Unchanged**
 
@@ -128,35 +160,33 @@ reply is. The failure is still logged.
 
 | Step | File | Current lines | Change |
 |---|---|---|---|
-| 1a | `src/components/chat/chat-view.tsx` | after 115 | add `sendTokenRef` |
-| 1b | `src/components/chat/chat-view.tsx` | 355-372 | `startNewChat` retires the token and unlocks the box |
-| 1c | `src/components/chat/chat-view.tsx` | 436-557 | `handleSend` takes a token and checks it after every await |
+| 1a | `src/components/chat/chat-view.tsx` | after 117 | add `sendTokenRef` |
+| 1b | `src/components/chat/chat-view.tsx` | 357-374 | `startNewChat` retires the token and unlocks the box |
+| 1c | `src/components/chat/chat-view.tsx` | 438-579 | `handleSend` takes a token and checks it after every await |
 
 No import changes; `useRef` is already imported. After 1a (+7 lines) step 1b
-is at 362-379; after 1b (+6 lines) step 1c starts at line 449. Step 1c is
-given as three sub-edits with their own shifted numbers.
+is at 364-381; after 1b (+6 lines) step 1c starts at line 451. Step 1c is
+given as four sub-edits with their own shifted numbers.
 
 ---
 
 ## 4. Step 1: `src/components/chat/chat-view.tsx`
 
-### 1a. After line 115: the token
+### 1a. After line 117: the token
 
-Lines 113-115 are the three bookkeeping refs; line 117 opens the element
+Lines 115-117 are the three bookkeeping refs; line 119 opens the element
 refs. The new ref goes with the first group.
 
-**Current code (lines 113-117, unchanged):**
+**Current code (lines 115-117, unchanged):**
 
 ```ts
   const shouldPinRef = useRef(false);
   const justLoadedRef = useRef(false);
   const ownSessionRef = useRef<string | null>(null);
-
-  const inputRef = useRef<HTMLTextAreaElement>(null);
 ```
 
-**Insert directly after line 115** (between `ownSessionRef` and the blank
-line):
+**Insert directly after it** (between `ownSessionRef` and the blank line
+above `inputRef`):
 
 ```ts
 
@@ -168,7 +198,7 @@ line):
   const sendTokenRef = useRef(0);
 ```
 
-### 1b. Lines 355-372 (362-379 after 1a): `startNewChat`
+### 1b. Lines 357-374 (364-381 after 1a): `startNewChat`
 
 Two additions at the top of the function: retire the token, and unlock the
 box. The rest of the body is unchanged.
@@ -190,7 +220,7 @@ box. The rest of the body is unchanged.
     setCurrentSessionTitle(NEW_CHAT_TITLE);
     setSidebarOpen(false);
 
-    window.history.replaceState(null, "", "/chat/new");
+    window.history.replaceState(null, "", `${BASE_PATH}/chat/new`);
 
     setTimeout(() => inputRef.current?.focus(), 100);
   };
@@ -219,49 +249,37 @@ box. The rest of the body is unchanged.
     setCurrentSessionTitle(NEW_CHAT_TITLE);
     setSidebarOpen(false);
 
-    window.history.replaceState(null, "", "/chat/new");
+    window.history.replaceState(null, "", `${BASE_PATH}/chat/new`);
 
     setTimeout(() => inputRef.current?.focus(), 100);
   };
 ```
 
-### 1c. Lines 436-557 (449-570 after 1a and 1b): `handleSend`
+### 1c. Lines 438-579 (451-592 after 1a and 1b): `handleSend`
 
-Three regions of the function change. Everything between them -- the
-early return, the box reset, the `userMessage` construction, the `FormData`
-assembly, the fetch and the parsing of the reply -- is untouched.
+Four regions of the function change. Everything between them -- the early
+return, the box reset, the `userMessage` construction, the `FormData`
+assembly, the `apiFetch` call with its `response.ok` check and the parsing of
+the reply -- is untouched.
 
-#### 1c-i. Lines 453-477 (466-490 after 1a and 1b): take the token, guard the adoption
+#### 1c-i. Lines 443-453 (456-466 after 1a and 1b): take the token, guard the login check
 
-From `setIsSending(true);` to the closing `}` of the session-creation block.
+From `setIsSending(true);` to the closing `}` of the login check, directly
+above `const currentInput = input;`.
 
 **Current code:**
 
 ```ts
     setIsSending(true);
 
-    let activeSessionId = sessionId || initialSessionId || "";
-    let isNewSession = false;
+    // The DICE login ends about once an hour. Nothing is cleared and no
+    // session is created until it is known to be alive: if it has ended, the
+    // provider takes over and sends the browser through the login page, and
+    // the text -- already saved as a draft -- is back in the box afterwards.
+    if (!(await loginStillAlive())) {
+      setIsSending(false);
 
-    if (!activeSessionId) {
-      try {
-        activeSessionId = await SessionStorage.createSession(userId);
-
-        isNewSession = true;
-
-        ownSessionRef.current = activeSessionId;
-
-        setSessionId(activeSessionId);
-
-        window.history.replaceState(null, "", `/chat/${activeSessionId}`);
-      } catch (error) {
-        console.error("Error creating session:", error);
-
-        setIsBackendError(true);
-        setIsSending(false);
-
-        return;
-      }
+      return;
     }
 ```
 
@@ -276,6 +294,63 @@ From `setIsSending(true);` to the closing `}` of the session-creation block.
     sendTokenRef.current += 1;
     const token = sendTokenRef.current;
 
+    // The DICE login ends about once an hour. Nothing is cleared and no
+    // session is created until it is known to be alive: if it has ended, the
+    // provider takes over and sends the browser through the login page, and
+    // the text -- already saved as a draft -- is back in the box afterwards.
+    if (!(await loginStillAlive())) {
+      if (sendTokenRef.current === token) setIsSending(false);
+
+      return;
+    }
+
+    // New may have been clicked while the login was being checked. Nothing
+    // has been cleared or sent at this point, and the text is still saved as
+    // the draft of the chat it was typed in, so this send simply ends here.
+    if (sendTokenRef.current !== token) return;
+```
+
+This sub-edit adds 11 lines.
+
+#### 1c-ii. Lines 467-493 (491-517 after 1a, 1b and 1c-i): guard the adoption
+
+From `let activeSessionId` to the closing `}` of the session-creation block.
+
+**Current code:**
+
+```ts
+    let activeSessionId = sessionId || initialSessionId || "";
+    let isNewSession = false;
+
+    if (!activeSessionId) {
+      try {
+        activeSessionId = await SessionStorage.createSession(userId);
+
+        isNewSession = true;
+
+        ownSessionRef.current = activeSessionId;
+
+        setSessionId(activeSessionId);
+
+        window.history.replaceState(
+          null,
+          "",
+          `${BASE_PATH}/chat/${activeSessionId}`,
+        );
+      } catch (error) {
+        console.error("Error creating session:", error);
+
+        setIsBackendError(true);
+        setIsSending(false);
+
+        return;
+      }
+    }
+```
+
+**Replace with:**
+
+```ts
     let activeSessionId = sessionId || initialSessionId || "";
     let isNewSession = false;
 
@@ -294,7 +369,11 @@ From `setIsSending(true);` to the closing `}` of the session-creation block.
 
           setSessionId(activeSessionId);
 
-          window.history.replaceState(null, "", `/chat/${activeSessionId}`);
+          window.history.replaceState(
+            null,
+            "",
+            `${BASE_PATH}/chat/${activeSessionId}`,
+          );
         }
       } catch (error) {
         console.error("Error creating session:", error);
@@ -308,13 +387,13 @@ From `setIsSending(true);` to the closing `}` of the session-creation block.
     }
 ```
 
-This sub-edit adds 13 lines.
+This sub-edit adds 7 lines.
 
-#### 1c-ii. Lines 487-493 (513-519 after 1a, 1b and 1c-i): guard the question bubble
+#### 1c-iii. Lines 503-509 (534-540 after 1a through 1c-ii): guard the question bubble
 
-Directly after the `userMessage` object. Two awaits can sit above this point
-(session creation, and the file read when an image is attached), so the
-screen may already belong to another chat here.
+Directly after the `userMessage` object. Three awaits can sit above this
+point (the login check, session creation, and the file read when an image is
+attached), so the screen may already belong to another chat here.
 
 **Current code:**
 
@@ -343,9 +422,9 @@ screen may already belong to another chat here.
     }
 ```
 
-This sub-edit adds 2 lines.
+This sub-edit adds 3 lines.
 
-#### 1c-iii. Lines 530-557 (558-585 after 1a through 1c-ii): guard the reply, the error line and the unlock
+#### 1c-iv. Lines 552-579 (586-613 after 1a through 1c-iii): guard the reply, the error line and the unlock
 
 From `const updatedMessages` to the end of the function. The title call for
 a new chat stays **before** the check in both branches, so a chat the user
@@ -428,8 +507,10 @@ left still gets its name.
   };
 ```
 
-A `return` inside `try` or `catch` still runs the `finally`, which is what
-keeps the unlock in one place.
+This sub-edit adds 11 lines. A `return` inside `try` or `catch` still runs
+the `finally`, which is what keeps the unlock in one place.
+
+The whole document adds 45 lines to the file.
 
 ---
 
@@ -440,10 +521,19 @@ keeps the unlock in one place.
   `""`. A counter that moves on every send and on every New is unambiguous,
   and it also covers "New, then send in the new chat": the old send's value
   is two behind and is dropped, the new send's value is current and lands.
-- **Why the token is taken before the first await.** `createSession` is a
-  network call. Taking the token after it would leave the adoption of the new
-  id (`setSessionId`, `replaceState`) unguarded, and the new chat on screen
-  would silently become session A.
+- **Why the token is taken before the first await.** The first await is now
+  the login check, and `createSession` after it is a network call too. Taking
+  the token after either would leave what follows unguarded: the box would be
+  cleared in the chat that is on screen now, and the adoption of the new id
+  (`setSessionId`, `replaceState`) would silently turn that chat into
+  session A.
+- **Why a send ends after the login check when its token is retired.** At
+  that point the send has done nothing: the box is not cleared, no session
+  exists, nothing was posted. The text is safe, because every keystroke is
+  saved as the draft of the chat it was typed in. Going on would mean clearing
+  the box of a chat the text does not belong to. Ending is the only choice
+  that loses nothing. For a new chat the draft is filed under "new", so
+  `startNewChat` puts the same text straight back in the box.
 - **Why the message is still sent when New was clicked during creation.**
   The user pressed Send; the text has already left the box. Dropping it would
   lose it and leave an empty session behind. Sending it gives the same
@@ -455,6 +545,10 @@ keeps the unlock in one place.
 - **Why `finally` is guarded.** Unguarded, a stale send arriving while the
   new chat has its own send in flight would clear `isSending`, removing
   "Thinking..." and enabling the button mid-request, and would steal focus.
+- **Why the failed login check is guarded too.** For the same reason as
+  `finally`: only the send that still owns the screen may unlock the box. In
+  practice the provider takes the chat off the screen when the login has
+  ended, so the guard only keeps the rule without exception.
 - **What has to keep the rule in future.** Any code path that swaps the chat
   on screen without a remount must bump `sendTokenRef`. Today that is only
   `startNewChat`. If chats are ever switched in place (the deferred
@@ -477,8 +571,6 @@ keeps the unlock in one place.
   reports `runState` per chat (see `update_waiting_mechanism.md`, step 2e),
   so a small spinner next to such a chat in Recents is a natural follow-up
   in `session-sidebar.tsx`.
-- **`response.ok`** is not checked after the `/api/chat` fetch; a non-2xx
-  body is parsed as if it were a reply. Pre-existing, unrelated.
 
 ---
 
@@ -496,12 +588,14 @@ Then confirm the token is read at every site:
 grep -n "sendTokenRef" src/components/chat/chat-view.tsx
 ```
 
-should print ten lines: the declaration, the bump in `startNewChat`, and in
-`handleSend` the bump, the `const token`, and six checks (adoption,
-creation failure, question bubble, reply, error line, `finally`).
+should print twelve lines: the declaration, the bump in `startNewChat`, and
+in `handleSend` the bump, the `const token`, and eight checks (failed login
+check, after the login check, adoption, creation failure, question bubble,
+reply, error line, `finally`).
 
-With the backend running, in a desktop-width window, using a question that
-takes several seconds to answer:
+With the backend running and a login in place (locally: the stand-in from
+`dev/mock-login-service.mjs`, see the Login section of `STRUCTURE.md`), in a
+desktop-width window, using a question that takes several seconds to answer:
 
 1. **The reported sequence.** From `/chat/new`, send. While "Thinking..." is
    up, click New. Expect: the greeting, an empty and usable box, the URL
@@ -532,3 +626,10 @@ takes several seconds to answer:
    once. The URL must stay `/chat/new` and the new chat must not show the
    question. Once the reply has returned, the created chat appears in
    Recents with a title and holds the question and the reply.
+8. **New during the login check.** Only reachable when the pass is being
+   renewed, so start the stand-in with `MOCK_PASS_LIFETIME_SECONDS=50`: the
+   page then asks `/auth/token` before every request. Throttle the network,
+   type a question on `/chat/new`, send, and click New at once. Expect: no
+   `POST .../sessions` and no `POST /api/chat` in the network panel, the URL
+   stays `/chat/new`, and the question is still in the box. Send again
+   without clicking New: it goes through as usual.

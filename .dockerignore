@@ -22,6 +22,9 @@ logs
 .vscode
 .idea
 
+# Development tools (the stand-in login service). Never part of the image.
+dev
+
 Dockerfile
 .dockerignore
 README.md

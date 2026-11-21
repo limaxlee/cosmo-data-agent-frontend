@@ -3,7 +3,9 @@
 // hands them over one request at a time -- so all a restored message carries is
 // where to fetch them from.
 export interface MessageArtifact {
-  // Ready-to-fetch, same-origin URL for the stored file.
+  // Where the stored file is on this app's server, as a path for
+  // SessionStorage.loadArtifact(). The request needs the login pass and the
+  // base path, which that call adds -- so this is not usable as an <img src>.
   url: string;
   filename?: string;
   mimeType?: string;

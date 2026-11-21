@@ -2,8 +2,43 @@
 
 **Date:** 2026-11-16
 **Branch / base:** `develop-261116` at `760a046 new waiting and issues`
-**Status:** not applied. Nothing in `src/` has been changed; this file is the
-instruction set.
+**Status:** applied. This change has been in the code since
+`fe881c9 [feat] apply fixes 261117`. There is nothing left to apply. Do not
+apply it again. Checked against the working tree on 2026-11-22.
+
+## State on 2026-11-22
+
+Everything this document describes is in the current code, the working tree
+of `develop-261121`: `fe881c9` plus the DICE single sign-on change.
+
+| Piece | Where it is now |
+|---|---|
+| `SessionStorage.createSessionTitle()` (step 1a) | `src/lib/session-api.ts`, lines 482-501 |
+| `nameNewSession()` (step 2a) | `src/components/chat/chat-view.tsx`, lines 430-436 |
+| the await before the reply is shown (step 2b) | `chat-view.tsx`, line 557 |
+| the await before the error line is shown (step 2c) | `chat-view.tsx`, line 571 |
+
+The code reads differently from the blocks below in two ways. Neither changes
+what it does.
+
+- **`apiFetch(` in place of `fetch(`.** Since the single sign-on change every
+  backend call goes through `apiFetch()` from `src/lib/auth-client.ts`, which
+  adds the base path and the login pass. `createSessionTitle` therefore reads
+  `await apiFetch(` where step 1a shows `await fetch(`.
+- **Three comments were not carried over** when the change was applied: the
+  JSDoc above `createSessionTitle` (step 1a), the comment above
+  `nameNewSession` (step 2a) and the two-line comment in the `catch`
+  (step 2c). The comment in step 2b is in the code.
+
+`handleSend`, which steps 2b and 2c sit in, has changed around them since: it
+now checks the login before anything else, sends through `apiFetch` and checks
+`response.ok`. The two awaits added here are untouched by that.
+
+The rest of this document is kept as the record of the change. Its line
+numbers and "current code" blocks describe the code before the change, at the
+commit named above, and no longer match any file.
+
+---
 
 Line numbers refer to the files as they are at the commit above, before any
 edit from this document or from `update_waiting_mechanism.md` is applied. The

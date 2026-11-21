@@ -23,6 +23,24 @@ export function readDraft(sessionId: string): string {
   }
 }
 
+/**
+ * Removes every saved draft. Used when a different person logs in on this
+ * browser, so they do not find the previous person's unsent text in the box.
+ */
+export function clearDrafts(): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+
+      if (key?.startsWith(PREFIX)) localStorage.removeItem(key);
+    }
+  } catch {
+    // Storage blocked -- there were no drafts to begin with.
+  }
+}
+
 /** An empty draft is deleted rather than stored, so sent chats leave no key. */
 export function writeDraft(sessionId: string, text: string): void {
   if (typeof window === "undefined") return;

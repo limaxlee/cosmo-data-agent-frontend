@@ -1,19 +1,30 @@
 # Update: keep the session list across sidebar remounts
 
 **Date:** 2026-11-17
-**Branch / base:** `develop-261116` at `47c9c78 update waiting md files`
+**Re-based:** 2026-11-22, onto the code with the DICE single sign-on change.
+**Branch / base:** `develop-261121`: commit `fe881c9 [feat] apply fixes 261117`
+plus the DICE single sign-on change. That is the working tree as it stands on
+2026-11-22.
 **Status:** not applied. Nothing in `src/` has been changed; this file is the
 instruction set.
 
-The only file touched is `src/components/chat/session-sidebar.tsx`. It is
-identical in the working tree and at the commit above, and has not changed
-since `93a5f34 update icon`, so the line numbers below hold whether or not the
-uncommitted edits from `update_waiting_mechanism.md` and
-`update_session_title.md` are in place. Within the file, edits are listed top
-to bottom, so each edit shifts the numbers of the ones below it. The "current
-code" block under every step is copied verbatim from the file and is the
-reliable anchor; search for it rather than trusting the number once you have
-started editing.
+The only file touched is `src/components/chat/session-sidebar.tsx`, 632 lines
+long in the working tree described above. No other pending document touches
+that file, so the line numbers below hold whether or not
+`update_session_open_blank.md` and `update_stale_reply.md` have been applied.
+Within the file, edits are listed top to bottom, so each edit shifts the
+numbers of the ones below it. The "current code" block under every step is
+copied verbatim from the file and is the reliable anchor; search for it rather
+than trusting the number once you have started editing.
+
+**What the re-base changed in this document.** The single sign-on change
+added one import line to the file, so every line number is one higher, and
+the context block in step 1b reads `logout` where it read `clearUserId`. The
+three edits themselves are the same as in the version of 2026-11-17, except
+for the last sentence of the first paragraph of the comment in step 1a, which
+spoke of "a logout and a login as someone else". The parts of sections 2, 5, 6
+and 7 that describe logging out and logging in as someone else were rewritten,
+because both now work differently.
 
 ---
 
@@ -40,7 +51,7 @@ Recents area renders the empty-state placeholder. That one network round-trip
 is the blink. The same happens going from `/chat/new` to a session and back.
 
 The component already works around this remount for one piece of state. The
-module-level `lastCollapsed` variable (lines 45-51) keeps the collapsed/expanded
+module-level `lastCollapsed` variable (lines 46-52) keeps the collapsed/expanded
 choice alive between instances, with a comment explaining the remount. This
 change does the same for the session list: the last list fetched is kept at
 module level and a new instance renders it on its first frame. The 5-second
@@ -76,12 +87,25 @@ a larger change and is left for a separate document; see section 6.
 
 **First page load, reload, direct URL.** The cache is empty, since the module
 has just been evaluated, so the sidebar behaves exactly as today: empty until
-the first fetch.
+the first fetch. The return from the login page is such a page load too, so
+after the hourly trip through the login the list is fetched afresh.
 
-**Logout, then login as someone else.** The cache is tied to the user id it
-was fetched for and is ignored when the id differs, so the second user starts
-from an empty list, as today. The same user logging back in sees their list
-at once and the poll refreshes it.
+**Logout.** Logging out navigates the browser to `/auth/logout`, away from the
+app. The cache does not survive that: whoever opens the app next gets a new
+page load and an empty cache.
+
+**A different person in the same browser.** A different person normally
+arrives through a full page load: the login redirect, or the one reload the
+app does when the backend answers `user_mismatch`. Either empties the cache.
+One path keeps the page: the login check running again without a navigation
+("Check again", or the check that follows an ended login) and `/auth/me`
+answering with someone else. For that case the cache is tied to the user id
+it was fetched for and is ignored when the id differs, so the second person
+starts from an empty list.
+
+**The app leaving the screen and coming back.** "Waiting for approval", then
+"Check again" once approved, remounts the chat without a page load. The same
+person's list is then on screen at once and the poll refreshes it.
 
 **Rename and delete.** Both already call `loadSessions()` when they finish, so
 the cache is refreshed with the server's truth before the next remount can
@@ -103,28 +127,28 @@ variable stays `null`, so server-rendered output and hydration are unchanged.
 
 | Step | File | Current lines | Change |
 |---|---|---|---|
-| 1a | `src/components/chat/session-sidebar.tsx` | after 62 | add `lastSessions` cache and `readSessions()` |
-| 1b | `src/components/chat/session-sidebar.tsx` | 82 | seed `sessions` state from the cache |
-| 1c | `src/components/chat/session-sidebar.tsx` | 111-124 | `loadSessions` writes the cache |
+| 1a | `src/components/chat/session-sidebar.tsx` | after 63 | add `lastSessions` cache and `readSessions()` |
+| 1b | `src/components/chat/session-sidebar.tsx` | 83 | seed `sessions` state from the cache |
+| 1c | `src/components/chat/session-sidebar.tsx` | 112-125 | `loadSessions` writes the cache |
 
-No import changes. `ChatSession` is already imported on line 12, and `userId`
-is already in scope at both edit sites (from `useUser()` on line 81; its type
+No import changes. `ChatSession` is already imported on line 13, and `userId`
+is already in scope at both edit sites (from `useUser()` on line 82; its type
 is `string | null`).
 
-After 1a, which adds 20 lines, step 1b is at line 102 and step 1c at lines
-131-144.
+After 1a, which adds 20 lines, step 1b is at line 103. After 1b, which adds 2
+lines, step 1c is at lines 134-147. Step 1c adds 1 line.
 
 ---
 
 ## 4. Step 1: `src/components/chat/session-sidebar.tsx`
 
-### 1a. After line 62: add the cache and its reader
+### 1a. After line 63: add the cache and its reader
 
-Line 62 is the closing `}` of `readCollapsed`; line 64 opens
+Line 63 is the closing `}` of `readCollapsed`; line 65 opens
 `interface SessionSidebarProps`. The new code goes between them, next to the
 collapsed-state cache it mirrors.
 
-**Current code (lines 43-62, unchanged):**
+**Current code (lines 44-63, unchanged):**
 
 ```ts
 const SIDEBAR_COLLAPSED_KEY = "sidebar_collapsed";
@@ -160,7 +184,7 @@ function readCollapsed(): boolean {
  * Recents list vanish for one round-trip and reappear. The last list fetched is
  * kept here and is what a new instance renders on its first frame; the poll
  * then replaces it as it always has. It is tied to the user it was fetched for,
- * so after a logout and a login as someone else it is ignored, not shown.
+ * so a different person on the same page load never sees it.
  *
  * Only ever written in the browser (loadSessions runs from an effect), so the
  * server's copy stays null and server-rendered output is unchanged.
@@ -174,22 +198,22 @@ function readSessions(userId: string | null): ChatSession[] {
 }
 ```
 
-### 1b. Line 82: seed the state from the cache
+### 1b. Line 83 (103 after 1a): seed the state from the cache
 
 The `useState` initializer is a function, so it runs once per mount and reads
 whatever the previous instance left behind. On a cold load that is `[]`, the
 same as today.
 
-**Current code (lines 81-84, for context):**
+**Current code (lines 82-85, for context):**
 
 ```ts
-  const { userId, clearUserId } = useUser();
+  const { userId, logout } = useUser();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 ```
 
-**Replace line 82 only:**
+**Replace line 83 only:**
 
 ```ts
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -203,7 +227,7 @@ same as today.
   );
 ```
 
-### 1c. Lines 111-124: write the cache on every successful fetch
+### 1c. Lines 112-125 (134-147 after 1a and 1b): write the cache on every successful fetch
 
 One line is added, directly before `setSessions(remote)`. Inside the `try`,
 `userId` is already narrowed to `string` by the early return above it, so the
@@ -249,7 +273,10 @@ object literal type-checks against the cache's shape.
 ```
 
 A failed fetch leaves the cache as it was, so a backend hiccup during a click
-still shows the last good list rather than wiping it.
+still shows the last good list rather than wiping it. That includes a fetch
+the backend refuses (the login ended, or the approval was taken away): the
+app leaves the screen then, and the cached list is only shown again to the
+same person.
 
 ---
 
@@ -257,14 +284,17 @@ still shows the last good list rather than wiping it.
 
 - **Why a module variable and not `localStorage`.** The list is per user and
   changes every few seconds; persisting it across page loads would show stale
-  chats for a moment on every reload and would have to be invalidated on
-  logout. The flicker only exists within one page load, between two
-  instances of the same component, and a module variable covers exactly that
-  window. It is also the pattern `lastCollapsed` already set in this file.
-- **Why the user id is stored with the list.** `useUser()` can hand the
-  sidebar a different user after a logout and login in the same tab. Keying
-  the cache on the id costs one field and rules out showing the previous
-  user's chat titles, even for a frame.
+  chats for a moment on every reload, and it would leave one person's chat
+  titles in the browser for the next person. The flicker only exists within
+  one page load, between two instances of the same component, and a module
+  variable covers exactly that window. It is also the pattern `lastCollapsed`
+  already set in this file.
+- **Why the user id is stored with the list.** With the DICE login a
+  different person almost always means a new page load, which empties the
+  cache by itself. The one exception is the login check running again on the
+  same page and coming back with someone else. Keying the cache on the id
+  costs one field and rules out showing the previous person's chat titles in
+  that case, even for a frame.
 - **Why `readSessions` takes `string | null`.** That is the type `useUser()`
   returns for `userId`, and the initializer runs before any narrowing. A null
   id yields `[]`, the same as a cache miss.
@@ -287,10 +317,10 @@ still shows the last good list rather than wiping it.
 - **The `userId` prop** in `SessionSidebarProps` is declared and passed by
   `chat-view.tsx` but not destructured; the component reads `useUser()`
   instead. Harmless, left alone.
-- **Clearing the cache on logout.** Not needed for correctness because of the
-  user-id check. If holding another user's titles in memory until the next
-  reload is undesirable anyway, add `lastSessions = null;` as the first line
-  of `handleLogout` (line 271 before this change, 291 after).
+- **Clearing the cache on logout.** Not needed. Logout leaves the page
+  (`/auth/logout`), and the list is never shown to a different user id. An
+  earlier version of this document suggested `lastSessions = null;` in
+  `handleLogout`; with the DICE login that line would have nothing to do.
 
 ---
 
@@ -308,10 +338,12 @@ Then confirm the cache is wired at both ends:
 grep -n "lastSessions" src/components/chat/session-sidebar.tsx
 ```
 
-should print four lines: the declaration, two reads in `readSessions`, and
-the write in `loadSessions`.
+should print four lines: the declaration, the line in `readSessions` that
+reads it twice, the `return` under it, and the write in `loadSessions`.
 
-With the backend running, in a desktop-width window:
+With the backend running and a login in place (locally: the stand-in from
+`dev/mock-login-service.mjs`, see the Login section of `STRUCTURE.md`), in a
+desktop-width window:
 
 1. Open a chat with several entries in Recents. Click another chat. The
    Recents list must not blink or show "No conversations yet"; only the
@@ -329,7 +361,15 @@ With the backend running, in a desktop-width window:
 6. Scroll the Recents list, click a chat with the sidebar open. The list
    content stays, but its scroll position returns to the top. Expected; see
    section 6.
-7. Log out, log in as a different user id. Recents starts empty, then fills
-   with that user's chats. The previous user's titles never appear.
-8. Narrow the window to the mobile layout. Open the sheet, click a chat. The
+7. A different person. Locally: start the stand-in with
+   `MOCK_PASS_LIFETIME_SECONDS=50` and open the app, so the page asks for a
+   pass before every request. Then restart the stand-in with the same setting
+   and another `MOCK_LOGIN_ID`. Within a few seconds the page reloads once
+   and Recents starts empty, then fills with that person's chats. The
+   previous person's titles never appear. (The second login ID has to be
+   approved in the local backend as well, or the page ends on "Waiting for
+   approval".)
+8. Log out from the account menu. The browser leaves the app for
+   `/auth/logout`. Come back and log in: Recents starts empty, then fills.
+9. Narrow the window to the mobile layout. Open the sheet, click a chat. The
    sheet closes and the chat loads, as before.

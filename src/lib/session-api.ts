@@ -1,10 +1,14 @@
 import { ChatSession, Message, MessageArtifact, RunState } from "./types";
 import { ERROR_REPLY } from "./error-reply";
+import { apiFetch } from "./auth-client";
 
 // Relative on purpose. Requests go to this app's own origin and are
 // forwarded to the ADK backend by src/app/backend/[...path]/route.ts, which
 // keeps every call same-origin -- no CORS, and no backend host baked into
 // the client bundle at build time.
+//
+// Every call goes through apiFetch(), which puts the base path in front and
+// adds the pass from the DICE login. So this stays without the base path.
 const API_BASE = "/backend";
 
 // The one field on the backend's RenameSessionRequest. The route declares the
@@ -321,7 +325,7 @@ function mapApiSession(api: ApiSession): ChatSession {
 
 export class SessionStorage {
   static async createSession(userId: string): Promise<string> {
-    const res = await fetch(
+    const res = await apiFetch(
       `${API_BASE}/apps/users/${encodeURIComponent(userId)}/sessions`,
       {
         method: "POST",
@@ -354,7 +358,7 @@ export class SessionStorage {
    *   title = session_id
    */
   static async listSessions(userId: string): Promise<ChatSession[]> {
-    const res = await fetch(
+    const res = await apiFetch(
       `${API_BASE}/apps/users/${encodeURIComponent(userId)}/sessions`,
       {
         headers: {
@@ -387,7 +391,7 @@ export class SessionStorage {
     userId: string,
     sessionId: string,
   ): Promise<ChatSession> {
-    const res = await fetch(
+    const res = await apiFetch(
       `${API_BASE}/apps/users/${encodeURIComponent(
         userId,
       )}/sessions/${encodeURIComponent(sessionId)}`,
@@ -411,7 +415,7 @@ export class SessionStorage {
     userId: string,
     sessionId: string,
   ): Promise<RunState> {
-    const res = await fetch(
+    const res = await apiFetch(
       `${API_BASE}/apps/users/${encodeURIComponent(
         userId,
       )}/sessions/${encodeURIComponent(sessionId)}/run-state`,
@@ -438,7 +442,7 @@ export class SessionStorage {
    * caller to turn into an object URL.
    */
   static async loadArtifact(url: string): Promise<Blob> {
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       headers: {
         Accept: "image/*",
       },
@@ -458,7 +462,7 @@ export class SessionStorage {
   ): Promise<void> {
     const params = new URLSearchParams({ [RENAME_TITLE_PARAM]: title });
 
-    const res = await fetch(
+    const res = await apiFetch(
       `${API_BASE}/apps/users/${encodeURIComponent(
         userId,
       )}/sessions/${encodeURIComponent(sessionId)}/title?${params.toString()}`,
@@ -479,7 +483,7 @@ export class SessionStorage {
     userId: string,
     sessionId: string,
   ): Promise<void> {
-    const res = await fetch(
+    const res = await apiFetch(
       `${API_BASE}/apps/users/${encodeURIComponent(
         userId,
       )}/sessions/${encodeURIComponent(sessionId)}/title`,
@@ -497,7 +501,7 @@ export class SessionStorage {
   }
 
   static async deleteSession(userId: string, sessionId: string): Promise<void> {
-    const res = await fetch(
+    const res = await apiFetch(
       `${API_BASE}/apps/users/${encodeURIComponent(
         userId,
       )}/sessions/${encodeURIComponent(sessionId)}`,

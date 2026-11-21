@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { SessionStorage } from "@/lib/session-api";
 import { writeDraft } from "@/lib/draft-storage";
+import { BASE_PATH } from "@/lib/base-path";
 import { ChatSession } from "@/lib/types";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { DataAgentWordmark } from "@/components/data-agent-wordmark";
@@ -78,7 +79,7 @@ export function SessionSidebar({
   onCurrentSessionTitleChange,
   className = "",
 }: SessionSidebarProps) {
-  const { userId, clearUserId } = useUser();
+  const { userId, logout } = useUser();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -212,7 +213,7 @@ export function SessionSidebar({
       const onThisSession =
         currentSessionId === sessionId ||
         (typeof window !== "undefined" &&
-          window.location.pathname === `/chat/${sessionId}`);
+          window.location.pathname === `${BASE_PATH}/chat/${sessionId}`);
 
       if (onThisSession) {
         onNewSession();
@@ -270,7 +271,7 @@ export function SessionSidebar({
 
   const handleLogout = () => {
     setIsMobileOpen(false);
-    clearUserId();
+    logout();
   };
 
   const userInitial = (userId ?? "").trim().charAt(0).toUpperCase();

@@ -2,8 +2,53 @@
 
 **Date:** 2026-11-16
 **Branch / base:** `develop-261116` at `760a046 new waiting and issues`
-**Status:** not applied. Nothing in `src/` has been changed; this file is the
-instruction set.
+**Status:** applied. This change has been in the code since
+`fe881c9 [feat] apply fixes 261117`. There is nothing left to apply. Do not
+apply it again. Checked against the working tree on 2026-11-22.
+
+## State on 2026-11-22
+
+Everything this document describes is in the current code, the working tree
+of `develop-261121`: `fe881c9` plus the DICE single sign-on change.
+
+| Piece | Where it is now |
+|---|---|
+| `RunState` and `ChatSession.runState` (step 1) | `src/lib/types.ts`, lines 24 and 34 |
+| `RunState` import, `run_state` on both API shapes, `parseRunState()` (steps 2a-2c) | `src/lib/session-api.ts`, lines 1, 42, 89 and 96-98 |
+| both mappers return `runState` (steps 2d, 2e) | `session-api.ts`, lines 259 and 322 |
+| `SessionStorage.getRunState()` (step 2f) | `session-api.ts`, lines 414-437 |
+| `withMissingReply()`, and no `REPLY_WAIT_LIMIT_MS` (step 3a) | `src/components/chat/chat-view.tsx`, lines 30-45 |
+| the polling effect on `run-state` (step 3b) | `chat-view.tsx`, lines 262-324 |
+| the open-session decision (step 3c) | `chat-view.tsx`, lines 336-346 |
+
+`grep -rn "REPLY_WAIT_LIMIT_MS" src` prints nothing, as section 10 asks.
+
+The code reads differently from the blocks below in these ways. None changes
+what it does.
+
+- **`apiFetch(` in place of `fetch(`.** Since the single sign-on change every
+  backend call goes through `apiFetch()` from `src/lib/auth-client.ts`, which
+  adds the base path and the login pass. `getRunState` and `getSession`
+  therefore read `await apiFetch(` where step 2f shows `await fetch(`.
+- **Some comments were not carried over** when the change was applied: the
+  three lines above `RunState` (step 1a), the JSDoc above `getRunState`
+  (step 2f) and the five lines above `const running` (step 3c). The comment
+  above `REPLY_POLL_INTERVAL_MS` (step 3a) kept its old wording.
+- **One old comment was left in.** Above the polling effect, the three-line
+  comment this document replaces is still there (`chat-view.tsx`, lines
+  262-264), directly above the new five-line one. The effect itself is as in
+  step 3b, word for word.
+
+One item of section 9 no longer holds. "Idle logout during a wait" refers to
+the 30-minute idle logout and `keepAlive()`. Both were removed by the single
+sign-on change; the DICE login now decides how long a person stays logged in,
+and `fix_keep_alive.md` has nothing left to fix.
+
+The rest of this document is kept as the record of the change. Its line
+numbers and "current code" blocks describe the code before the change, at the
+commit named above, and no longer match any file.
+
+---
 
 All line numbers refer to the files as they are at the commit above, before
 any edit from this document is applied. Within one file, edits are listed top

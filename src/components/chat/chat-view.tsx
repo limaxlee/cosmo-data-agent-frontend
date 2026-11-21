@@ -12,6 +12,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { SessionSidebar } from "@/components/chat/session-sidebar";
 import { useFollowReveal } from "@/components/chat/use-follow-reveal";
 import { SessionStorage } from "@/lib/session-api";
+import { apiFetch, loginStillAlive } from "@/lib/auth-client";
+import { BASE_PATH } from "@/lib/base-path";
 import { readDraft, writeDraft } from "@/lib/draft-storage";
 import { NEW_CHAT_TITLE, documentTitle } from "@/lib/app-title";
 import { ERROR_REPLY } from "@/lib/error-reply";
@@ -180,7 +182,7 @@ export default function ChatView({
 
     const fetchSuggestedQuestions = async () => {
       try {
-        const response = await fetch("/suggested-questions.json");
+        const response = await fetch(`${BASE_PATH}/suggested-questions.json`);
         const data = await response.json();
 
         setSuggestedQuestions(data);
@@ -366,7 +368,7 @@ export default function ChatView({
     setCurrentSessionTitle(NEW_CHAT_TITLE);
     setSidebarOpen(false);
 
-    window.history.replaceState(null, "", "/chat/new");
+    window.history.replaceState(null, "", `${BASE_PATH}/chat/new`);
 
     setTimeout(() => inputRef.current?.focus(), 100);
   };
@@ -438,6 +440,18 @@ export default function ChatView({
       return;
     }
 
+    setIsSending(true);
+
+    // The DICE login ends about once an hour. Nothing is cleared and no
+    // session is created until it is known to be alive: if it has ended, the
+    // provider takes over and sends the browser through the login page, and
+    // the text -- already saved as a draft -- is back in the box afterwards.
+    if (!(await loginStillAlive())) {
+      setIsSending(false);
+
+      return;
+    }
+
     const currentInput = input;
 
     const currentFile = attachedFile;
@@ -449,8 +463,6 @@ export default function ChatView({
     if (inputRef.current) {
       inputRef.current.style.height = "auto";
     }
-
-    setIsSending(true);
 
     let activeSessionId = sessionId || initialSessionId || "";
     let isNewSession = false;
@@ -465,7 +477,11 @@ export default function ChatView({
 
         setSessionId(activeSessionId);
 
-        window.history.replaceState(null, "", `/chat/${activeSessionId}`);
+        window.history.replaceState(
+          null,
+          "",
+          `${BASE_PATH}/chat/${activeSessionId}`,
+        );
       } catch (error) {
         console.error("Error creating session:", error);
 
@@ -514,10 +530,16 @@ export default function ChatView({
         form.append("file", currentFile);
       }
 
-      const response = await fetch("/api/chat", {
+      const response = await apiFetch("/api/chat", {
         method: "POST",
         body: form,
       });
+
+      // A refusal or a backend error is not a reply. It ends in the error
+      // line below instead of being read as one.
+      if (!response.ok) {
+        throw new Error(`Chat request failed: ${response.status}`);
+      }
 
       const data = await response.json();
 

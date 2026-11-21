@@ -31,7 +31,18 @@ async function proxy(
 
   const headers = new Headers();
 
-  for (const name of ["accept", "content-type"]) {
+  // `authorization` carries the pass from the DICE login service. It is passed
+  // on untouched and never checked or logged here: the backend is the only
+  // place that checks it, and it answers 401 when the pass is missing or bad.
+  // `user-agent` and `x-forwarded-for` go along because the backend records
+  // the browser with each visit, and would otherwise record Node's own client.
+  for (const name of [
+    "accept",
+    "content-type",
+    "authorization",
+    "user-agent",
+    "x-forwarded-for",
+  ]) {
     const value = req.headers.get(name);
 
     if (value) headers.set(name, value);

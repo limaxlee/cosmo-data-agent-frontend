@@ -8,6 +8,36 @@ Linux ephemeral range (32768-60999), so the kernel will never assign it to an
 outbound connection and take it from us. Confirm it is free before the first
 run -- `sudo ss -lntp | grep 13080` should print nothing.
 
+## Before you deploy: login
+
+People log in through the DICE single sign-on, and the app is served under the
+path `/data-agent`. Two things follow.
+
+**Deploy this version only after the backend with authorization is running.**
+This version makes the backend reachable from the DICE address, through
+`/data-agent/backend/...`. Nothing in this app checks who is calling: it
+passes the caller's pass on, and the backend decides. A backend that does not
+check passes yet would answer anyone.
+
+**The app works only behind the DICE address.** Open it as
+
+```
+https://dice.gtrai.sec.samsung.net/data-agent
+```
+
+The gateway sends `/data-agent` and `/data-agent/...` to this container on port
+13080 with the path unchanged, and `/auth/...` to the DICE login service.
+Opened directly as `http://10.240.35.173:13080/data-agent`, the page loads but
+stops at "Could not check your login": the login service and its cookie exist
+only on the DICE address. That direct address is still good for one thing,
+checking that the container is up:
+
+```bash
+curl -I http://10.240.35.173:13080/data-agent/chat/new   # 200 when it is running
+```
+
+How the login works is described in [`STRUCTURE.md`](STRUCTURE.md#login).
+
 ## On the server
 
 ```bash
@@ -19,7 +49,8 @@ sudo docker build -t da-frontend:0.0.1 .
 sudo bash ./run_da_frontend.sh
 ```
 
-Open `http://10.240.35.173:13080` from any machine on the network.
+Then open `https://dice.gtrai.sec.samsung.net/data-agent` (see
+[Before you deploy: login](#before-you-deploy-login)).
 
 ### Compared to the backend
 
@@ -48,10 +79,21 @@ the extra `cd`.
 | `BACKEND_ORIGIN` | run time | `-e BACKEND_ORIGIN=...` in `run_da_frontend.sh` |
 | `NEXT_PUBLIC_APP_TITLE` | build time | `--build-arg NEXT_PUBLIC_APP_TITLE="..."` |
 | `NEXT_PUBLIC_MAX_INPUT_LENGTH` | build time | `--build-arg NEXT_PUBLIC_MAX_INPUT_LENGTH=...` |
+| `NEXT_PUBLIC_BASE_PATH` | build time | `--build-arg NEXT_PUBLIC_BASE_PATH=...`, default `/data-agent` |
 
 `NEXT_PUBLIC_*` values are inlined into the JavaScript bundle by Next.js, so
 changing them needs a rebuild. `BACKEND_ORIGIN` is read on every request and
 only needs a container restart.
+
+`NEXT_PUBLIC_BASE_PATH` is the path the app is served under. The default,
+`/data-agent`, is what the gateway is set up for, so a plain `docker build`
+needs no build arg. It has to match the gateway rule exactly: the gateway does
+not remove the path, and the app answers under that path only -- every other
+address, the top of the site included, is a 404. Leading slash, no trailing
+slash.
+
+There is no login setting. This app holds no secret and checks no pass; it
+passes the `Authorization` header of each request on to the backend.
 
 ## Why there is no CORS to configure
 
@@ -59,13 +101,19 @@ The browser never calls the backend. Every request goes to the frontend's own
 origin and is forwarded server-side:
 
 ```
-browser -> 10.240.35.173:13080/backend/apps/users/... -> BACKEND_ORIGIN/apps/users/...
-browser -> 10.240.35.173:13080/api/chat              -> BACKEND_ORIGIN/apps/users/.../run
+browser -> <DICE address>/data-agent/backend/apps/users/... -> BACKEND_ORIGIN/apps/users/...
+browser -> <DICE address>/data-agent/backend/auth/me        -> BACKEND_ORIGIN/auth/me
+browser -> <DICE address>/data-agent/api/chat               -> BACKEND_ORIGIN/apps/users/.../run
 ```
 
 The proxy is `src/app/backend/[...path]/route.ts`. Because everything is
 same-origin, there are no preflight requests and the backend needs no
 `allow_origins` entry for the frontend, in any browser.
+
+Both routes pass three request headers on to the backend unchanged:
+`Authorization` (the pass), and `User-Agent` and `X-Forwarded-For`, which the
+backend records with each visit. Neither route logs the `Authorization`
+header.
 
 The run script joins the `da_backend` Docker network and reaches the backend as
 `http://da_backend:18080`, so backend traffic never leaves the host. If the
@@ -130,6 +178,8 @@ default `json-file` driver would otherwise grow without bound. Redeploying then
 needs `sudo docker rm -f da_frontend` instead of `sudo docker stop`.
 
 ## If the port is not reachable from other machines
+
+The gateway has to reach port 13080 on this host.
 
 ```bash
 sudo ss -lntp | grep 13080                              # container port published?

@@ -12,10 +12,11 @@ Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 
 1. [What the app does](#what-the-app-does)
 2. [How to run it](#how-to-run-it)
 3. [Directory structure](#directory-structure)
-4. [API calls — what is called from where](#api-calls--what-is-called-from-where)
-5. [Theming — how to change colors](#theming--how-to-change-colors)
-6. [Typography — how to change the font](#typography--how-to-change-the-font)
-7. [Major points to pay attention to](#major-points-to-pay-attention-to)
+4. [Login](#login)
+5. [API calls — what is called from where](#api-calls--what-is-called-from-where)
+6. [Theming — how to change colors](#theming--how-to-change-colors)
+7. [Typography — how to change the font](#typography--how-to-change-the-font)
+8. [Major points to pay attention to](#major-points-to-pay-attention-to)
 
 ---
 
@@ -23,7 +24,8 @@ Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 
 
 A single-feature chat application:
 
-- A user enters an ID (no real auth — see [`user-provider.tsx`](src/providers/user-provider.tsx))
+- A person is logged in through the DICE single sign-on, and has to be approved
+  by an admin before the app opens (see [Login](#login))
 - They start a chat, type a message, optionally attach one image
 - Messages go to an ADK backend; replies render as Markdown
 - Past sessions are listed in a sidebar, and can be opened, exported, or deleted
@@ -40,6 +42,10 @@ A single-feature chat application:
 
 Both pages render the same component, `ChatView`. The only difference is whether
 `initialSessionId` is passed.
+
+These are the addresses without a base path, as in local development. In the
+Docker build everything above sits under `/data-agent` (see
+[Base path](#base-path)).
 
 ---
 
@@ -58,6 +64,10 @@ npm install
 cp .env.example .env
 # then edit .env and set NEXT_PUBLIC_API_BASE_URL to your ADK backend
 ```
+
+The app cannot get past its login check on `localhost` by itself, because the
+DICE login service exists only on the DICE address. Run the stand-in next to
+`npm run dev` -- see [Running locally](#running-locally) under Login.
 
 ### Commands
 
@@ -118,19 +128,24 @@ src/
 │   │   └── session-sidebar.tsx   # session list, search, export, delete
 │   ├── ui/                       # shadcn primitives — regenerable, avoid editing
 │   ├── theme-toggle.tsx          # app-shell, not chat-specific
-│   └── user-gate.tsx             # app-shell, blocks the app until a user ID is set
+│   └── user-gate.tsx             # app-shell, shows the app only to a logged-in, approved person
 │
 ├── providers/                    # React context providers
 │   ├── theme-provider.tsx        # ThemeProvider + useTheme
-│   └── user-provider.tsx         # UserProvider + useUser
+│   └── user-provider.tsx         # UserProvider + useUser: the login state
 │
 └── lib/                          # non-React modules only
+    ├── auth-client.ts            # the DICE login service, the pass, and apiFetch()
+    ├── base-path.ts              # BASE_PATH, for addresses written by hand
     ├── session-api.ts            # HTTP client for the ADK session endpoints
     ├── types.ts                  # Message, ChatSession
     └── utils.ts                  # cn() — DO NOT MOVE (see gotchas)
 
 public/
 └── suggested-questions.json      # welcome-screen prompt cards, fetched at runtime
+
+dev/
+└── mock-login-service.mjs        # stand-in login service, local development only
 ```
 
 ### Conventions
@@ -141,6 +156,122 @@ public/
 - **`lib/` means non-React.** Anything rendering JSX belongs in `providers/` or
   `components/`.
 - **Imports use the `@/` alias**, mapped to `src/` in [`tsconfig.json`](tsconfig.json).
+
+---
+
+## Login
+
+The app has no login of its own. It uses the single sign-on the DICE platform
+already runs, and the backend decides who may use the data agent.
+
+```
+browser ── https://dice.gtrai.sec.samsung.net ──► gateway
+    /auth/...          ──► DICE login service            (not this app)
+    /data-agent        ──► this app's server, port 13080
+    /data-agent/...    ──► this app's server, port 13080
+
+this app's server ── BACKEND_ORIGIN ──► data agent backend
+```
+
+### What happens when a person opens the app
+
+1. The page asks the login service `GET /auth/session`. The browser attaches
+   the login cookie by itself. The page can never read that cookie.
+2. Not logged in: the page navigates to `/auth/login?callbackUrl=<this
+   address>`. The login service takes the person through Samsung SSO and
+   navigates back to the same address.
+3. Logged in: the page asks `GET /auth/token` and receives a **pass** -- a
+   short-lived signed string. The page keeps it in memory only and never looks
+   inside it.
+4. The page calls `GET /backend/auth/me` with `Authorization: Bearer <pass>`.
+   This app's server passes the call on to the backend's `/auth/me`. The
+   backend checks the pass and answers who this is (`user_id`) and whether an
+   admin has approved them (`is_active`).
+5. Approved: the app starts, and `user_id` is the `{userId}` of every backend
+   address. Not approved: the waiting screen.
+6. Every later call to `/backend/...` and `/api/chat` carries the same header.
+
+> `/backend/auth/me` is the **backend**. `/auth/session`, `/auth/token`,
+> `/auth/login` and `/auth/logout` are the **login service**, at the top of the
+> site. The names look alike and the two must not be mixed up.
+
+The pass lasts at most an hour, and so does the DICE login. About once an hour
+`/auth/token` answers 401, and the page goes through step 2 again. If the
+person is still logged in to Samsung SSO this is silent, but it is a full page
+navigation: the page comes back on the same chat, and unsent text is back in
+the box because every keystroke is saved as a draft.
+
+### Where the code is
+
+| File | What it owns |
+|---|---|
+| [`src/lib/auth-client.ts`](src/lib/auth-client.ts) | The login service and the pass. `getPass()` renews the pass when it has under a minute left. `apiFetch()` is the one way the app calls its own server: it adds the base path and the pass, gets a new pass on a 401 (and sends a `GET` once more), and tells the provider when the login ended or the backend answered `account_inactive` or `user_mismatch` |
+| [`src/providers/user-provider.tsx`](src/providers/user-provider.tsx) | The start sequence above and the state it ends in. `useUser()` gives `status`, `userId`, `user`, `isAdmin`, `checkAgain()` and `logout()` |
+| [`src/components/user-gate.tsx`](src/components/user-gate.tsx) | One screen per state. The app is rendered only in `ready` |
+| [`src/app/backend/[...path]/route.ts`](src/app/backend/[...path]/route.ts), [`src/app/api/chat/route.ts`](src/app/api/chat/route.ts) | Pass the `Authorization` header on to the backend untouched. Nothing on the server checks the pass, and there is no secret in this repository |
+
+| State | Meaning | Screen |
+|---|---|---|
+| `loading` | the check is running | a spinner |
+| `redirecting` | on the way to the login page | "Going to Samsung SSO..." |
+| `signed-out` | not logged in, and a redirect was already tried in this tab | "Log in" and "Check again" |
+| `pending` | logged in, not approved | "Waiting for approval", the ID, "Check again", "Log out" |
+| `ready` | logged in and approved | the app |
+| `error` | the login service or the backend could not be asked | "Try again" |
+
+Things kept in the browser, none of them a credential:
+
+| Where | Key | What for |
+|---|---|---|
+| `sessionStorage` | `login_redirect_tried` | Set when this tab was sent to the login page, removed when a login succeeded. A login that keeps failing therefore redirects once and then shows the "Log in" button instead of looping. Logout sets it too, so the app does not log straight back in |
+| `sessionStorage` | `user_mismatch_reload` | Set when the page reloaded because a different person is now logged in to DICE. Stops a second reload |
+| `localStorage` | `last_user_id` | The last person who used the app in this browser. When a different one arrives, the saved drafts (`chat_draft:*`) are removed |
+
+### Base path
+
+`NEXT_PUBLIC_BASE_PATH` is the path the app is served under: empty locally,
+`/data-agent` in the Docker build. The gateway does not remove it, so the app
+is built with it ([`next.config.mjs`](next.config.mjs)).
+
+Next.js adds it by itself to `router.push()`, `<Link>`, the redirect in
+`next.config.mjs` and its own script, font and image files. It does **not**
+touch an address the code writes by hand. Those use `BASE_PATH` from
+[`src/lib/base-path.ts`](src/lib/base-path.ts): `apiFetch()`, the fetch of
+`suggested-questions.json`, `window.history.replaceState(...)` and the
+comparison with `window.location.pathname`. The login service's `/auth/...`
+addresses never get it.
+
+### Running locally
+
+On `localhost` there is no login service, so the app would stop at "Could not
+check your login". [`dev/mock-login-service.mjs`](dev/mock-login-service.mjs)
+stands in for it: it answers the same four `/auth/...` addresses and hands out
+a real signed pass.
+
+```bash
+# terminal 1
+node dev/mock-login-service.mjs
+
+# terminal 2 -- with AUTH_DEV_PROXY_TARGET=http://127.0.0.1:13081 in .env.local
+npm run dev
+```
+
+`AUTH_DEV_PROXY_TARGET` makes `next.config.mjs` send `/auth/...` to the
+stand-in. It is never set for a deployment, and then that rule does not exist.
+
+For a local backend to accept the pass, the stand-in must sign it with the same
+secret: start it with `AUTH_SERVICE_JWT_SECRET` set to the local backend's
+value of the same name (never the production secret). The login ID it hands
+out is `MOCK_LOGIN_ID`, `gildong.hong` by default. All settings, including
+short lifetimes for trying expiry, are listed at the top of the script.
+
+A person the backend sees for the first time is not approved, so the app shows
+"Waiting for approval". The simplest way past it on a local backend is one row
+in its `user_admins` table, then "Check again":
+
+```sql
+INSERT INTO user_admins (user_id, added_by) VALUES ('<login id>', 'bootstrap');
+```
 
 ---
 

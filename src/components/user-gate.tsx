@@ -1,53 +1,107 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { LoaderCircle } from "lucide-react";
+
 import { useUser } from "@/providers/user-provider";
-import { Input } from "@/components/ui/input";
+import { loginUrl } from "@/lib/auth-client";
+import { APP_TITLE } from "@/lib/app-title";
 import { Button } from "@/components/ui/button";
 
+function Screen({
+  title,
+  children,
+}: {
+  title: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="w-full max-w-sm space-y-4 text-center">
+        <h1 className="text-xl font-semibold">{title}</h1>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Shows the app only to a person who is logged in and approved. In every
+ * other state the app is not rendered at all, so its polling stops and no
+ * stale error banner is left on screen.
+ *
+ * Nothing here changes the address: it is what the login page comes back to.
+ */
 export function UserGate({ children }: { children: React.ReactNode }) {
-  const { userId, setUserId, isReady } = useUser();
-  const [value, setValue] = useState("");
-  const router = useRouter();
-  const pathname = usePathname();
-  const loggedOut = isReady && !userId;
+  const { status, userId, checkAgain, logout } = useUser();
 
-  useEffect(() => {
-    if (loggedOut && pathname !== "/chat/new") router.replace("/chat/new");
-  }, [loggedOut, pathname, router]);
+  if (status === "ready") return <>{children}</>;
 
-  if (!isReady) return null;
-
-  if (!userId) {
+  if (status === "loading") {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4">
-        <div className="w-full max-w-sm space-y-4">
-          <div className="space-y-1 text-center">
-            <h1 className="text-xl font-semibold">Enter your knox ID</h1>
-            <p className="text-sm text-muted-foreground">
-              Temporary stand-in until login is built.
-            </p>
-          </div>
-          <Input
-            autoFocus
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") setUserId(value);
-            }}
-          />
-          <Button
-            className="w-full"
-            onClick={() => setUserId(value)}
-            disabled={!value.trim()}
-          >
-            Continue
-          </Button>
-        </div>
+      <div className="flex min-h-screen items-center justify-center">
+        <LoaderCircle
+          className="h-5 w-5 animate-spin text-muted-foreground"
+          aria-label="Checking your login"
+        />
       </div>
     );
   }
 
-  return <>{children}</>;
+  if (status === "redirecting") {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <p className="text-sm text-muted-foreground">
+          Going to Samsung SSO...
+        </p>
+      </div>
+    );
+  }
+
+  if (status === "signed-out") {
+    return (
+      <Screen title="You are not logged in">
+        <p className="text-sm text-muted-foreground">
+          Log in with Samsung SSO to use {APP_TITLE}.
+        </p>
+        <Button
+          className="w-full"
+          onClick={() => window.location.assign(loginUrl())}
+        >
+          Log in
+        </Button>
+        <Button variant="ghost" className="w-full" onClick={checkAgain}>
+          Check again
+        </Button>
+      </Screen>
+    );
+  }
+
+  if (status === "pending") {
+    return (
+      <Screen title="Waiting for approval">
+        <p className="text-sm text-muted-foreground">
+          An administrator has to approve your account before you can use{" "}
+          {APP_TITLE}.
+        </p>
+        <p className="text-sm font-medium">{userId}</p>
+        <Button className="w-full" onClick={checkAgain}>
+          Check again
+        </Button>
+        <Button variant="ghost" className="w-full" onClick={logout}>
+          Log out
+        </Button>
+      </Screen>
+    );
+  }
+
+  return (
+    <Screen title="Could not check your login">
+      <p className="text-sm text-muted-foreground">
+        The login service or the server did not answer.
+      </p>
+      <Button className="w-full" onClick={checkAgain}>
+        Try again
+      </Button>
+    </Screen>
+  );
 }

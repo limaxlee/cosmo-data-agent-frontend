@@ -1,19 +1,21 @@
 # Update: no new-chat greeting while a session is loading
 
 **Date:** 2026-11-17
-**Branch / base:** `develop-261116` at `47c9c78 update waiting md files`, plus
-the uncommitted edits from `update_waiting_mechanism.md` and
-`update_session_title.md`. That is the working tree as it stands today.
+**Re-based:** 2026-11-22, onto the code with the DICE single sign-on change.
+**Branch / base:** `develop-261121`: commit `fe881c9 [feat] apply fixes 261117`
+plus the DICE single sign-on change (base path, `apiFetch`, the login check in
+`handleSend`). That is the working tree as it stands on 2026-11-22.
+`update_waiting_mechanism.md` and `update_session_title.md` are already part
+of that code.
 **Status:** not applied. Nothing in `src/` has been changed; this file is the
 instruction set.
 
 The only file touched is `src/components/chat/chat-view.tsx`. Line numbers
-refer to that file as it is in the working tree described above, 834 lines
-long. Apply this document after `update_waiting_mechanism.md`: the "current
-code" block in step 1b is `loadSessionFromBackend` as that document leaves it.
-On a tree without it the function body differs but the edit is the same (a
-`finally` block is added), and the line numbers in the state section are 10
-lower, those in the JSX section 28 lower.
+refer to that file as it is in the working tree described above, 856 lines
+long, with `update_stale_reply.md` **not** yet applied. If that document has
+been applied first, step 1a is where it is given here, add 7 to the numbers in
+step 1b, and add 45 to the numbers in steps 1c and 1d; its edits sit between
+the blocks changed here, so nothing else moves.
 
 Within the file, edits are listed top to bottom, so each edit shifts the
 numbers of the ones below it; the shifted numbers are given at each step. The
@@ -22,7 +24,16 @@ the reliable anchor; search for it rather than trusting the number once you
 have started editing.
 
 This change is independent of `update_sidebar_flicker.md`, which touches a
-different file. Apply either, both, in any order.
+different file, and of `update_stale_reply.md`, which touches other blocks of
+this file. Apply any of them, in any order.
+
+**What the re-base changed in this document.** Only line numbers. None of the
+four blocks edited below was touched by the single sign-on change, so the code
+in every "current code" and "replace with" block is the same as in the version
+of 2026-11-17. Two things were corrected along the way: step 1b adds 4 lines
+(it said 3), which moves the shifted numbers of steps 1c and 1d by one, and
+the second `grep` in section 7 searched for a name that one of its four lines
+does not contain.
 
 ---
 
@@ -48,7 +59,7 @@ means "new chat" and the greeting renders. It stays until
 
 The component already tells the two cases apart on mount for something else.
 `currentSessionTitle` starts as `""` when `initialSessionId` is given and as
-`NEW_CHAT_TITLE` when it is not (lines 101-103). This change adds one flag
+`NEW_CHAT_TITLE` when it is not (lines 103-105). This change adds one flag
 with the same seed: `true` while the session named in the URL is on its way,
 `false` from the moment the load has settled. While the flag is up the pane
 draws nothing.
@@ -95,32 +106,40 @@ backend a spinner would itself flash for a few milliseconds, which is the kind
 of blink this change removes. A delayed indicator for slow loads is listed in
 section 6.
 
+**With the DICE login.** The chat is on screen only for a person who is
+logged in and approved (`UserGate`), so `userId` is set from the first frame
+and the load always starts on mount. While the login itself is being checked
+the gate shows its own spinner and `ChatView` is not mounted at all; the blank
+pane described here comes after that, for the session fetch only. If the load
+fails because the login has ended, the provider is told first and takes the
+chat off the screen, so neither the banner nor the greeting is seen.
+
 ---
 
 ## 3. Summary of edits
 
 | Step | File | Current lines | Change |
 |---|---|---|---|
-| 1a | `src/components/chat/chat-view.tsx` | after 103 | add `isSessionLoading` state |
-| 1b | `src/components/chat/chat-view.tsx` | 326-353 | `loadSessionFromBackend` clears it in `finally` |
-| 1c | `src/components/chat/chat-view.tsx` | after 567 | derive `showEmptyState` |
-| 1d | `src/components/chat/chat-view.tsx` | 615, 621, 624 | pane uses the flag and `showEmptyState` |
+| 1a | `src/components/chat/chat-view.tsx` | after 105 | add `isSessionLoading` state |
+| 1b | `src/components/chat/chat-view.tsx` | 328-355 | `loadSessionFromBackend` clears it in `finally` |
+| 1c | `src/components/chat/chat-view.tsx` | after 589 | derive `showEmptyState` |
+| 1d | `src/components/chat/chat-view.tsx` | 637, 643, 646 | pane uses the flag and `showEmptyState` |
 
 No import changes. `useState` is already imported. After 1a (+10 lines) step
-1b is at 336-363; after 1b (+3 lines) step 1c is after line 580; after 1c (+4
-lines) step 1d is at 632, 638 and 641.
+1b is at 338-365; after 1b (+4 lines) step 1c is after line 603; after 1c (+4
+lines) step 1d is at 655, 661 and 664.
 
 ---
 
 ## 4. Step 1: `src/components/chat/chat-view.tsx`
 
-### 1a. After line 103: the flag
+### 1a. After line 105: the flag
 
-Lines 101-103 are the `currentSessionTitle` state, whose initial value already
-depends on `initialSessionId` in the same way. Line 105 opens the
+Lines 103-105 are the `currentSessionTitle` state, whose initial value already
+depends on `initialSessionId` in the same way. Line 107 opens the
 `suggestedQuestions` state.
 
-**Current code (lines 101-103, unchanged):**
+**Current code (lines 103-105, unchanged):**
 
 ```ts
   const [currentSessionTitle, setCurrentSessionTitle] = useState(
@@ -143,7 +162,7 @@ depends on `initialSessionId` in the same way. Line 105 opens the
   );
 ```
 
-### 1b. Lines 326-353 (336-363 after 1a): clear the flag when the load settles
+### 1b. Lines 328-355 (338-365 after 1a): clear the flag when the load settles
 
 The whole of `loadSessionFromBackend`. Only the tail changes: a `finally`
 block is added after the `catch`. Everything inside `try` and `catch` stays
@@ -219,11 +238,11 @@ as it is.
   };
 ```
 
-### 1c. After line 567 (580 after 1a and 1b): derive `showEmptyState`
+### 1c. After line 589 (603 after 1a and 1b): derive `showEmptyState`
 
-Line 567 is the `lastUserIndex` computation, directly above `return (`.
+Line 589 is the `lastUserIndex` computation, directly above `return (`.
 
-**Current code (line 567, unchanged):**
+**Current code (line 589, unchanged):**
 
 ```ts
   const lastUserIndex = messages.map((m) => m.role).lastIndexOf("user");
@@ -238,14 +257,14 @@ Line 567 is the `lastUserIndex` computation, directly above `return (`.
   const showEmptyState = messages.length === 0 && !isSessionLoading;
 ```
 
-### 1d. Lines 615, 621, 624 (632, 638, 641 after 1a-1c): the pane
+### 1d. Lines 637, 643, 646 (655, 661, 664 after 1a-1c): the pane
 
 Three one-line edits inside the messages area. The two class expressions use
 `showEmptyState`; the branch itself becomes three-way, with `null` while
-loading. The comment block above `<ScrollArea>` (lines 608-612) and
+loading. The comment block above `<ScrollArea>` (lines 630-634) and
 everything inside the two branches stay as they are.
 
-**Current code (lines 613-627):**
+**Current code (lines 635-649):**
 
 ```tsx
         <ScrollArea
@@ -330,7 +349,9 @@ the duration of the load.
   whenever `initialSessionId` is present on mount, which is exactly when the
   flag starts `true`; the `finally` therefore always runs. The
   `ownSessionRef` early return cannot fire on a fresh mount, since the ref is
-  `null` then.
+  `null` then. The effect's other early return, `if (!userId) return;`, cannot
+  fire either: `UserGate` mounts the chat only once `/auth/me` has answered,
+  so `userId` is never null inside `ChatView`.
 
 ---
 
@@ -367,26 +388,34 @@ grep -n "messages.length === 0" src/components/chat/chat-view.tsx
 should print exactly one line, the `showEmptyState` definition. And
 
 ```
-grep -n "isSessionLoading" src/components/chat/chat-view.tsx
+grep -n "SessionLoading" src/components/chat/chat-view.tsx
 ```
 
 should print four lines: the state declaration, the `finally`, the
-`showEmptyState` definition, and the pane's branch.
+`showEmptyState` definition, and the pane's branch. (Search for
+`SessionLoading`, not `isSessionLoading`: the line in the `finally` reads
+`setIsSessionLoading`, with a capital I, and a case-sensitive search for the
+lower-case name skips it.)
 
-With the backend running, in a desktop-width window:
+With the backend running and a login in place (locally: the stand-in from
+`dev/mock-login-service.mjs`, see the Login section of `STRUCTURE.md`), in a
+desktop-width window:
 
 1. Open a chat with a few messages, then click a different chat in the
    sidebar. The pane must go blank and then show the messages. Neither the
    "무엇을 도와드릴까요?" heading nor the suggested-question cards may appear
    at any point. Repeat several times, including fast clicks.
-2. Reload the page on a `/chat/{id}` URL. Same: blank, then messages.
-3. Open `/chat/new`. The greeting and the cards are there on the first frame,
-   as before.
+2. Reload the page on a `/chat/{id}` URL. Same: the login check's spinner,
+   then a blank pane, then messages. No greeting.
+3. Open `/chat/new`. The greeting and the cards are there on the first frame
+   after the login check, as before.
 4. Open a chat whose run is still going (send a slow question in another
    tab, then click it here). Blank, then the history with "Thinking..." under
    it, with the pane scrolled to that line.
-5. Stop the backend and open a chat URL. The red banner and the greeting
-   appear together once the request has failed. Nothing before that.
+5. Stop the backend while the app is open and click a chat. The red banner
+   and the greeting appear together once the request has failed. Nothing
+   before that. (With the backend down from the start, the app does not get
+   past the login check at all and shows "Could not check your login".)
 6. Throttle the network in the browser's dev tools so the session fetch
    takes a couple of seconds. The pane stays blank for the whole wait; the
    header, composer and sidebar are there throughout; no spinner.

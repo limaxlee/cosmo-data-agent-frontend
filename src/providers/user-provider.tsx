@@ -1,88 +1,3 @@
-// "use client";
-
-// import { createContext, useContext, useEffect, useRef, useState } from "react";
-
-// interface UserContextValue {
-//   userId: string | null;
-//   setUserId: (id: string) => void;
-//   clearUserId: () => void;
-//   isReady: boolean;
-// }
-
-// const STORAGE_KEY = "mock_user_id";
-// const SESSION_MS = 2 * 60 * 60 * 1000;
-
-// interface StoredSession {
-//   id: string;
-//   expiresAt: number;
-// }
-
-// const UserContext = createContext<UserContextValue | undefined>(undefined);
-
-// export function UserProvider({ children }: { children: React.ReactNode }) {
-//   const [userId, setUserIdState] = useState<string | null>(null);
-//   const [isReady, setIsReady] = useState(false);
-//   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-//   const clearUserId = () => {
-//     localStorage.removeItem(STORAGE_KEY);
-//     setUserIdState(null);
-//     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-//   };
-
-//   const scheduleExpiry = (expiresAt: number) => {
-//     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-//     const msLeft = expiresAt - Date.now();
-//     if (msLeft <= 0) {
-//       clearUserId();
-//       return;
-//     }
-//     timeoutRef.current = setTimeout(() => clearUserId(), msLeft);
-//   };
-
-//   useEffect(() => {
-//     try {
-//       const raw = localStorage.getItem(STORAGE_KEY);
-//       if (raw) {
-//         const parsed: StoredSession = JSON.parse(raw);
-//         if (parsed.expiresAt > Date.now()) {
-//           setUserIdState(parsed.id);
-//           scheduleExpiry(parsed.expiresAt);
-//         } else {
-//           localStorage.removeItem(STORAGE_KEY);
-//         }
-//       }
-//     } catch {}
-//     setIsReady(true);
-
-//     return () => {
-//       if (timeoutRef.current) clearTimeout(timeoutRef.current);
-//     };
-//   }, []);
-
-//   const setUserId = (id: string) => {
-//     const trimmed = id.trim();
-//     if (!trimmed) return;
-//     const expiresAt = Date.now() + SESSION_MS;
-//     const session: StoredSession = { id: trimmed, expiresAt };
-//     localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-//     setUserIdState(trimmed);
-//     scheduleExpiry(expiresAt);
-//   };
-
-//   return (
-//     <UserContext.Provider value={{ userId, setUserId, clearUserId, isReady }}>
-//       {children}
-//     </UserContext.Provider>
-//   );
-// }
-
-// export function useUser() {
-//   const ctx = useContext(UserContext);
-//   if (!ctx) throw new Error("useUser must be used within a UserProvider");
-//   return ctx;
-// }
-
 "use client";
 
 import {
@@ -94,188 +9,306 @@ import {
   useState,
 } from "react";
 
-interface UserContextValue {
-  userId: string | null;
-  setUserId: (id: string) => void;
-  clearUserId: () => void;
-  // Pushes the idle logout back by IDLE_MS. Wired to user activity below, and
-  // called by the chat view while a reply is pending, so waiting for the agent
-  // does not count as being idle.
-  keepAlive: () => void;
-  isReady: boolean;
+import {
+  LOGOUT_URL,
+  LoginEndedError,
+  clearLoginTried,
+  fetchWithPass,
+  forgetPass,
+  isLoggedIn,
+  loginUrl,
+  loginWasTried,
+  markLoginTried,
+  onLoginEvent,
+} from "@/lib/auth-client";
+import { clearDrafts } from "@/lib/draft-storage";
+
+/**
+ * Where the person stands with the DICE single sign-on. UserGate renders one
+ * screen per status, and the app itself only in "ready".
+ */
+export type LoginStatus =
+  | "loading" // the check is running
+  | "redirecting" // the browser is on its way to the login page
+  | "signed-out" // not logged in, and a redirect was already tried in this tab
+  | "pending" // logged in, not approved by an admin (yet)
+  | "ready" // logged in and approved
+  | "error"; // the login service or the backend could not be asked
+
+/** The backend's answer to GET /auth/me. */
+export interface CurrentUser {
+  // The login ID in lower case: the {user_id} of every backend address.
+  user_id: string;
+  // "May use the data agent". Already true for admins.
+  is_active: boolean;
+  is_admin: boolean;
+  email: string | null;
+  full_name: string | null;
+  department: string | null;
+  company: string | null;
+  created_at: string;
 }
 
-const STORAGE_KEY = "mock_user_id";
+interface LoginState {
+  status: LoginStatus;
+  user: CurrentUser | null;
+}
 
-// The login ends after this long without activity. Activity is any pointer,
-// keyboard, wheel, scroll or touch event, the tab becoming visible again, or a
-// reply the chat is still waiting for.
-const IDLE_MS = 30 * 60 * 1000;
+interface UserContextValue {
+  status: LoginStatus;
+  user: CurrentUser | null;
+  // The ID the chat uses in backend addresses. Null until /auth/me answered.
+  userId: string | null;
+  // Nothing is built on this yet; it is here for a later admin page.
+  isAdmin: boolean;
+  // Runs the start sequence again: "Check again" and "Try again".
+  checkAgain: () => void;
+  logout: () => void;
+}
 
-// Activity events arrive many times a second; the expiry is rewritten at most
-// this often.
-const KEEP_ALIVE_THROTTLE_MS = 15 * 1000;
+// Where the stand-in login this replaced kept the typed knox ID.
+const LEGACY_LOGIN_KEY = "mock_user_id";
 
-const ACTIVITY_EVENTS = [
-  "pointerdown",
-  "pointermove",
-  "keydown",
-  "wheel",
-  "scroll",
-  "touchstart",
-] as const;
+// localStorage. The last person who used the app in this browser -- an ID,
+// not a credential. A different one means the saved drafts are not theirs.
+const LAST_USER_KEY = "last_user_id";
 
-interface StoredSession {
-  id: string;
-  expiresAt: number;
+// sessionStorage. Set to the ID the page was running as when it reloaded
+// because the backend answered `user_mismatch`. See the listener below.
+const MISMATCH_RELOAD_KEY = "user_mismatch_reload";
+
+const LOADING: LoginState = { status: "loading", user: null };
+const FAILED: LoginState = { status: "error", user: null };
+
+// Not logged in. The first time in a tab the browser is sent to the login
+// page, which comes back to the same address. If that did not lead to a login,
+// the mark is still set on the way back, and the person gets a button instead
+// of a second redirect.
+function notLoggedIn(): LoginState {
+  forgetPass();
+
+  if (loginWasTried() || !markLoginTried()) {
+    return { status: "signed-out", user: null };
+  }
+
+  window.location.replace(loginUrl());
+
+  return { status: "redirecting", user: null };
+}
+
+function rememberPerson(userId: string) {
+  try {
+    if (localStorage.getItem(LAST_USER_KEY) === userId) return;
+
+    clearDrafts();
+    localStorage.setItem(LAST_USER_KEY, userId);
+  } catch {
+    // Storage blocked: there are no drafts either.
+  }
+}
+
+// The reload after a `user_mismatch` is over once it has brought in a
+// different person. If the person is the same as before the reload, the mark
+// stays, so that a second mismatch ends on the error screen, not in a reload
+// loop.
+function settleMismatchReload(userId: string) {
+  try {
+    const reloadedAs = sessionStorage.getItem(MISMATCH_RELOAD_KEY);
+
+    if (reloadedAs !== null && reloadedAs !== userId) {
+      sessionStorage.removeItem(MISMATCH_RELOAD_KEY);
+    }
+  } catch {
+    // Storage blocked: there was no mark.
+  }
+}
+
+// The start sequence: is there a DICE login, get a pass, ask the backend who
+// this is and whether they are approved.
+async function runStart(): Promise<LoginState> {
+  try {
+    localStorage.removeItem(LEGACY_LOGIN_KEY);
+  } catch {
+    // Storage blocked: nothing was kept there.
+  }
+
+  let loggedIn: boolean;
+
+  try {
+    loggedIn = await isLoggedIn();
+  } catch {
+    // No redirect when the login service cannot be asked.
+    return FAILED;
+  }
+
+  if (!loggedIn) return notLoggedIn();
+
+  // This is the backend's /auth/me, reached through this app's server -- not
+  // the login service. The backend records each call as one visit, so it is
+  // made once per start and never on a timer.
+  let res: Response;
+
+  try {
+    res = await fetchWithPass("/backend/auth/me", {
+      headers: { Accept: "application/json" },
+    });
+  } catch (error) {
+    return error instanceof LoginEndedError ? notLoggedIn() : FAILED;
+  }
+
+  // Refused even with a new pass.
+  if (res.status === 401) return notLoggedIn();
+
+  if (!res.ok) return FAILED;
+
+  let user: CurrentUser;
+
+  try {
+    user = await res.json();
+  } catch {
+    return FAILED;
+  }
+
+  if (typeof user?.user_id !== "string" || !user.user_id) return FAILED;
+
+  // The login works. Removing the mark is what lets the next time the login
+  // ends -- about once an hour -- redirect by itself again.
+  clearLoginTried();
+  settleMismatchReload(user.user_id);
+  rememberPerson(user.user_id);
+
+  return { status: user.is_active === true ? "ready" : "pending", user };
+}
+
+// One sequence at a time, shared by everyone who asks while it runs. React
+// runs effects twice in development; two copies would race on the mark and
+// call /auth/me twice.
+let starting: Promise<LoginState> | null = null;
+
+function start(): Promise<LoginState> {
+  if (!starting) {
+    const run = runStart()
+      // Nothing above is expected to throw. If something does, the person
+      // gets "Try again" rather than a spinner that never ends.
+      .catch(() => FAILED)
+      .finally(() => {
+        if (starting === run) starting = null;
+      });
+
+    starting = run;
+  }
+
+  return starting;
 }
 
 const UserContext = createContext<UserContextValue | undefined>(undefined);
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
-  const [userId, setUserIdState] = useState<string | null>(null);
-  const [isReady, setIsReady] = useState(false);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // "loading" on the server and in the browser alike, so the two render the
+  // same thing; the login service is asked only after that.
+  const [state, setState] = useState<LoginState>(LOADING);
 
-  // Mirrors of the stored session for the event listeners, which are
-  // registered once and must not close over a stale render.
-  const userIdRef = useRef<string | null>(null);
-  const expiresAtRef = useRef<number | null>(null);
-  const lastKeepAliveRef = useRef(0);
+  // The same state for the listener below, which has to know the status as it
+  // is this instant, not as of the last render.
+  const stateRef = useRef<LoginState>(LOADING);
 
-  const clearTimer = useCallback(() => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = null;
+  const apply = useCallback((next: LoginState) => {
+    stateRef.current = next;
+    setState(next);
   }, []);
 
-  const clearUserId = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
-    userIdRef.current = null;
-    expiresAtRef.current = null;
-    setUserIdState(null);
-    clearTimer();
-  }, [clearTimer]);
-
-  const scheduleExpiry = useCallback(
-    (expiresAt: number) => {
-      clearTimer();
-      expiresAtRef.current = expiresAt;
-      const msLeft = expiresAt - Date.now();
-      if (msLeft <= 0) {
-        clearUserId();
-        return;
-      }
-      timeoutRef.current = setTimeout(() => clearUserId(), msLeft);
-    },
-    [clearTimer, clearUserId],
-  );
-
-  // Store the session, arm its timer, and mirror it for the listeners. Every
-  // write goes through here so the tabs sharing this storage see the same
-  // expiry (see the storage listener below).
-  const writeSession = useCallback(
-    (id: string, expiresAt: number) => {
-      const session: StoredSession = { id, expiresAt };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-      userIdRef.current = id;
-      setUserIdState(id);
-      scheduleExpiry(expiresAt);
-    },
-    [scheduleExpiry],
-  );
-
-  const keepAlive = useCallback(() => {
-    const id = userIdRef.current;
-    const expiresAt = expiresAtRef.current;
-    if (!id || expiresAt === null) return;
-
-    // A background tab may have had its timer held back by the browser. If
-    // the window has already passed, this is a logout, not an extension.
-    const now = Date.now();
-    if (now >= expiresAt) {
-      clearUserId();
-      return;
-    }
-
-    if (now - lastKeepAliveRef.current < KEEP_ALIVE_THROTTLE_MS) return;
-    lastKeepAliveRef.current = now;
-
-    writeSession(id, now + IDLE_MS);
-  }, [clearUserId, writeSession]);
-
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed: StoredSession = JSON.parse(raw);
-        if (parsed.expiresAt > Date.now()) {
-          userIdRef.current = parsed.id;
-          setUserIdState(parsed.id);
-          scheduleExpiry(parsed.expiresAt);
-        } else {
-          localStorage.removeItem(STORAGE_KEY);
-        }
-      }
-    } catch {}
-    setIsReady(true);
+    let cancelled = false;
 
-    const onActivity = () => keepAlive();
-
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") keepAlive();
-    };
-
-    // Another tab wrote (activity there) or removed (logout there) the
-    // session. Follow it, so one active tab keeps every tab logged in and one
-    // logout logs every tab out.
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== STORAGE_KEY && e.key !== null) return;
-
-      if (!e.newValue) {
-        userIdRef.current = null;
-        expiresAtRef.current = null;
-        setUserIdState(null);
-        clearTimer();
-        return;
-      }
-
-      try {
-        const parsed: StoredSession = JSON.parse(e.newValue);
-        userIdRef.current = parsed.id;
-        setUserIdState(parsed.id);
-        scheduleExpiry(parsed.expiresAt);
-      } catch {}
-    };
-
-    for (const type of ACTIVITY_EVENTS) {
-      window.addEventListener(type, onActivity, {
-        passive: true,
-        capture: true,
-      });
-    }
-    document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("storage", onStorage);
+    start().then((next) => {
+      if (!cancelled) apply(next);
+    });
 
     return () => {
-      for (const type of ACTIVITY_EVENTS) {
-        window.removeEventListener(type, onActivity, { capture: true });
-      }
-      document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("storage", onStorage);
-      clearTimer();
+      cancelled = true;
     };
-  }, [scheduleExpiry, keepAlive, clearTimer]);
+  }, [apply]);
 
-  const setUserId = (id: string) => {
-    const trimmed = id.trim();
-    if (!trimmed) return;
-    lastKeepAliveRef.current = Date.now();
-    writeSession(trimmed, Date.now() + IDLE_MS);
-  };
+  const checkAgain = useCallback(() => {
+    apply(LOADING);
+    start().then(apply);
+  }, [apply]);
+
+  // What apiFetch() notices while the app is running. Several requests can
+  // fail at the same moment (the sidebar and the chat both poll), and the
+  // reaction must happen once: each one below leaves "ready" straight away,
+  // and anything that arrives outside "ready" is ignored.
+  useEffect(
+    () =>
+      onLoginEvent((event) => {
+        const { status, user } = stateRef.current;
+
+        if (status !== "ready") return;
+
+        if (event === "login-ended") {
+          // The start sequence finds no login and, because the mark was
+          // removed on the last success, goes to the login page by itself.
+          forgetPass();
+          checkAgain();
+
+          return;
+        }
+
+        if (event === "account-inactive") {
+          // An admin took the approval away while the app was open.
+          apply({ status: "pending", user });
+
+          return;
+        }
+
+        // user-mismatch: a different person is now logged in to DICE in this
+        // browser. One reload brings their data in. If the mark is already
+        // set, the reload did not help, and reloading again would loop.
+        let reload = false;
+
+        try {
+          if (sessionStorage.getItem(MISMATCH_RELOAD_KEY) === null) {
+            sessionStorage.setItem(MISMATCH_RELOAD_KEY, user?.user_id ?? "");
+            reload = true;
+          }
+        } catch {
+          // Storage blocked: the mark cannot be kept, so do not reload.
+        }
+
+        if (!reload) {
+          apply(FAILED);
+
+          return;
+        }
+
+        apply(LOADING);
+        window.location.reload();
+      }),
+    [apply, checkAgain],
+  );
+
+  const logout = useCallback(() => {
+    // The mark stops the app from logging straight back in if the person
+    // returns to it in this tab. The pass is dropped and the app is taken off
+    // the screen before leaving, so a page the browser later restores from
+    // its history holds no pass and shows the "Log in" button.
+    markLoginTried();
+    forgetPass();
+    apply({ status: "signed-out", user: null });
+
+    window.location.assign(LOGOUT_URL);
+  }, [apply]);
 
   return (
     <UserContext.Provider
-      value={{ userId, setUserId, clearUserId, keepAlive, isReady }}
+      value={{
+        status: state.status,
+        user: state.user,
+        userId: state.user?.user_id ?? null,
+        isAdmin: state.user?.is_admin === true,
+        checkAgain,
+        logout,
+      }}
     >
       {children}
     </UserContext.Provider>

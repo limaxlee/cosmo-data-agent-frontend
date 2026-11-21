@@ -58,6 +58,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // `authorization` carries the pass from the DICE login service. It is
+    // passed on untouched and never checked or logged here: the backend is the
+    // only place that checks it, and it answers 401 when the pass is missing
+    // or bad. `user-agent` and `x-forwarded-for` go along because the backend
+    // records the browser with each visit.
+    const passedOn = new Headers();
+
+    for (const name of ["authorization", "user-agent", "x-forwarded-for"]) {
+      const value = req.headers.get(name);
+
+      if (value) passedOn.set(name, value);
+    }
+
     let pythonBackendResponse: Response;
 
     if (imageFile instanceof File && imageFile.size > 0) {
@@ -67,14 +80,15 @@ export async function POST(req: NextRequest) {
 
       pythonBackendResponse = await fetch(backendUrl, {
         method: "POST",
+        headers: passedOn,
         body: backendForm,
       });
     } else {
+      passedOn.set("Content-Type", "application/json");
+
       pythonBackendResponse = await fetch(backendUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: passedOn,
         body: JSON.stringify({
           query: message,
           ...(isNewSession ? { new_session: true } : {}),
@@ -90,8 +104,13 @@ export async function POST(req: NextRequest) {
         errorText,
       );
 
+      // Status and body go back unchanged, with the backend's content type,
+      // so the page can read the `code` of a refusal (see auth-client.ts).
+      const contentType = pythonBackendResponse.headers.get("content-type");
+
       return new NextResponse(errorText, {
         status: pythonBackendResponse.status,
+        headers: contentType ? { "content-type": contentType } : undefined,
       });
     }
 
