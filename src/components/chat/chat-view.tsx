@@ -104,6 +104,16 @@ export default function ChatView({
     initialSessionId ? "" : NEW_CHAT_TITLE,
   );
 
+  // True while the chat named in the URL is being fetched on mount. The pane
+  // draws nothing in that time: its empty state is the new-chat greeting, and
+  // with the history not yet in `messages` it would otherwise show for one
+  // round-trip before the bubbles land. Cleared when the load settles either
+  // way, so a chat with no messages and a failed load both end at the
+  // greeting as before. /chat/new has nothing to load and starts at false.
+  const [isSessionLoading, setIsSessionLoading] = useState(
+    Boolean(initialSessionId),
+  );
+
   const [suggestedQuestions, setSuggestedQuestions] = useState<
     SuggestedQuestion[]
   >([]);
@@ -351,6 +361,10 @@ export default function ChatView({
     } catch (e) {
       console.error("Error loading session:", e);
       setIsBackendError(true);
+    } finally {
+      // Same render as the messages (or the error) above: everything after
+      // the one await runs in a single pass, and React batches it.
+      setIsSessionLoading(false);
     }
   };
 
@@ -588,6 +602,10 @@ export default function ChatView({
 
   const lastUserIndex = messages.map((m) => m.role).lastIndexOf("user");
 
+  // The new-chat greeting: nothing on screen and nothing on its way. While a
+  // chat is still loading the pane stays blank instead (see the pane below).
+  const showEmptyState = messages.length === 0 && !isSessionLoading;
+
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       {/* Sidebar */}
@@ -634,16 +652,16 @@ export default function ChatView({
             no h-full below ever resolves. */}
         <ScrollArea
           className={`flex-1 min-h-0 p-4 ${
-            messages.length === 0 ? "[&>div>div]:!h-full" : ""
+            showEmptyState ? "[&>div>div]:!h-full" : ""
           }`}
           ref={scrollAreaRef}
         >
           <div
             className={`max-w-4xl mx-auto ${
-              messages.length === 0 ? "h-full" : "space-y-2"
+              showEmptyState ? "h-full" : "space-y-2"
             }`}
           >
-            {messages.length === 0 ? (
+            {isSessionLoading ? null : showEmptyState ? (
               /* min-h-full, not h-full: on a short window the box may grow
                  past the pane and scroll instead of clipping the heading. */
               <div className="flex flex-col items-center justify-center min-h-full text-center space-y-6">

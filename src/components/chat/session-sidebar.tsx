@@ -62,6 +62,26 @@ function readCollapsed(): boolean {
   }
 }
 
+/**
+ * The session list has to outlive the component for the same reason. A fresh
+ * sidebar used to start from an empty list and show the "No conversations yet"
+ * placeholder until listSessions() came back, so every click on a chat made the
+ * Recents list vanish for one round-trip and reappear. The last list fetched is
+ * kept here and is what a new instance renders on its first frame; the poll
+ * then replaces it as it always has. It is tied to the user it was fetched for,
+ * so a different person on the same page load never sees it.
+ *
+ * Only ever written in the browser (loadSessions runs from an effect), so the
+ * server's copy stays null and server-rendered output is unchanged.
+ */
+let lastSessions: { userId: string; sessions: ChatSession[] } | null = null;
+
+function readSessions(userId: string | null): ChatSession[] {
+  if (!userId || !lastSessions || lastSessions.userId !== userId) return [];
+
+  return lastSessions.sessions;
+}
+
 interface SessionSidebarProps {
   currentSessionId: string | null;
   userId: string;
@@ -80,7 +100,9 @@ export function SessionSidebar({
   className = "",
 }: SessionSidebarProps) {
   const { userId, logout } = useUser();
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [sessions, setSessions] = useState<ChatSession[]>(() =>
+    readSessions(userId),
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -115,6 +137,7 @@ export function SessionSidebar({
     try {
       setError(null);
       const remote = await SessionStorage.listSessions(userId);
+      lastSessions = { userId, sessions: remote };
       setSessions(remote);
     } catch (e) {
       console.error("Error loading sessions:", e);
