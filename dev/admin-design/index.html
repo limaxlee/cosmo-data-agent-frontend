@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>(function(){var t;try{t=localStorage.getItem("admin-design-theme")}catch(e){}var m=/[?&]theme=(dark|light)/.exec(location.search);if(m)t=m[1];if(t!=="dark"&&t!=="light")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.setAttribute("data-theme",t)})();</script>
+<title>Admin Area Designs</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: a striped guide bar on top (mock-up only), the design fills the rest of the window. */
+:root{
+  color-scheme:light;
+  --font:"Inter","Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+  /* copied from src/app/globals.css, :root */
+  --background:220 23% 97%; --foreground:218 14% 11%; --card:220 23% 97%; --popover:0 0% 100%;
+  --primary:220 84% 48%; --primary-foreground:220 23% 98%; --secondary:220 20% 94%; --muted:220 20% 94%;
+  --muted-foreground:216 10% 40%; --heading-foreground:218 14% 8%; --accent:216 22% 85%; --selected:215 20% 88%;
+  --destructive:0 72% 45%; --border:217 16% 90%; --tile-border:217 14% 86%; --sidebar-border:217 16% 87%;
+  --input:217 22% 93%; --ring:220 84% 48%;
+  /* the surface of the existing menus and of the theme button: bg-input, dark:bg-zinc-800 */
+  --menu:217 22% 93%;
+  /* new for the admin area: status colours. Always shown together with a word and an icon. */
+  --ok:152 62% 24%; --ok-bg:150 48% 89%;
+  --wait:28 88% 30%; --wait-bg:42 92% 85%;
+  --off:216 10% 40%; --off-bg:220 16% 90%;
+  --adm:220 84% 42%; --adm-bg:220 85% 93%;
+  --danger:0 72% 45%; --danger-bg:0 72% 45%;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;
+  /* copied from src/app/globals.css, [data-theme="dark"] */
+  --background:240 3.7% 11%; --foreground:210 20% 98%; --card:240 3.7% 11%; --popover:240 3.7% 11%;
+  --primary:210 20% 98%; --primary-foreground:220 13% 9%; --secondary:215 28% 17%; --muted:215 28% 17%;
+  --muted-foreground:217 11% 65%; --heading-foreground:210 20% 100%; --accent:215 18% 27%; --selected:215 14% 24%;
+  --destructive:0 63% 31%; --border:240 4.8% 83.9%; --tile-border:240 4% 26%; --sidebar-border:240 4% 20%;
+  --input:215 27% 35%; --ring:216 34% 17%;
+  --menu:240 3.7% 15.9%;
+  --ok:150 55% 68%; --ok-bg:152 40% 15%;
+  --wait:40 90% 66%; --wait-bg:34 55% 16%;
+  --off:217 11% 65%; --off-bg:240 4% 19%;
+  --adm:215 90% 76%; --adm-bg:218 45% 20%;
+  --danger:0 91% 71%; --danger-bg:0 63% 38%;}}
+:root[data-theme="dark"]{color-scheme:dark;
+  /* copied from src/app/globals.css, [data-theme="dark"] */
+  --background:240 3.7% 11%; --foreground:210 20% 98%; --card:240 3.7% 11%; --popover:240 3.7% 11%;
+  --primary:210 20% 98%; --primary-foreground:220 13% 9%; --secondary:215 28% 17%; --muted:215 28% 17%;
+  --muted-foreground:217 11% 65%; --heading-foreground:210 20% 100%; --accent:215 18% 27%; --selected:215 14% 24%;
+  --destructive:0 63% 31%; --border:240 4.8% 83.9%; --tile-border:240 4% 26%; --sidebar-border:240 4% 20%;
+  --input:215 27% 35%; --ring:216 34% 17%;
+  --menu:240 3.7% 15.9%;
+  --ok:150 55% 68%; --ok-bg:152 40% 15%;
+  --wait:40 90% 66%; --wait-bg:34 55% 16%;
+  --off:217 11% 65%; --off-bg:240 4% 19%;
+  --adm:215 90% 76%; --adm-bg:218 45% 20%;
+  --danger:0 91% 71%; --danger-bg:0 63% 38%;}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;display:flex;flex-direction:column;background:hsl(var(--background));color:hsl(var(--foreground));font:14px/1.45 var(--font);-webkit-font-smoothing:antialiased}
+button,input,select{font:inherit;color:inherit}
+h1,h2,h3,p{margin:0}
+.ic{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.muted{color:hsl(var(--muted-foreground))}
+.small{font-size:12px}
+.strong{font-weight:600}
+.mono{font-family:var(--mono);font-size:12px}
+.num{font-variant-numeric:tabular-nums}
+.trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.blk{display:block}
+.grow{flex:1;min-width:0}
+.row{display:flex;align-items:center;gap:8px;min-width:0}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+:root[data-theme="dark"] .sun,:root[data-theme="light"] .moon{display:none}
+
+/* ---------- guide bar: mock-up only ---------- */
+.guide{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:6px 12px;font-size:12px;border-bottom:1px dashed hsl(var(--muted-foreground)/.5);background:repeating-linear-gradient(135deg,hsl(var(--muted)) 0 10px,hsl(var(--background)) 10px 20px)}
+.g-btn{display:inline-flex;align-items:center;gap:5px;height:24px;border:1px solid hsl(var(--tile-border));background:hsl(var(--background));color:inherit;border-radius:999px;padding:0 10px;cursor:pointer;text-decoration:none;white-space:nowrap}
+.g-btn .ic{width:12px;height:12px}
+.g-btn:hover{background:hsl(var(--accent))}
+.g-btn[aria-current="true"]{background:hsl(var(--foreground));color:hsl(var(--background));border-color:transparent}
+.addr{font-family:var(--mono);background:hsl(var(--background));border:1px solid hsl(var(--tile-border));border-radius:6px;padding:2px 8px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+#app{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+
+/* ---------- controls, after src/components/ui ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 16px;border-radius:6px;border:1px solid transparent;background:transparent;font-size:14px;font-weight:500;white-space:nowrap;cursor:pointer;flex:none;transition:background .15s}
+.btn:disabled{opacity:.5;cursor:default;pointer-events:none}
+.btn.primary{background:hsl(var(--primary));color:hsl(var(--primary-foreground));box-shadow:0 1px 2px rgb(0 0 0/.05)}
+.btn.primary:hover{background:hsl(var(--primary)/.9)}
+.btn.quiet{background:hsl(var(--menu))}
+.btn.quiet:hover,.btn.ghost:hover{background:hsl(var(--accent))}
+.btn.danger{background:hsl(var(--danger-bg));color:#fff}
+.btn.danger:hover{opacity:.9}
+.btn.sm{height:32px;padding:0 12px;gap:6px}
+.btn.icon{width:36px;padding:0}
+.btn.sm.icon{width:32px}
+.btn:focus-visible,.input:focus-visible,.tab:focus-visible,.chip:focus-visible,.prow:focus-visible,.sitem:focus-visible,.lnk:focus-visible,.tile:focus-visible,.menu button:focus-visible{outline:2px solid hsl(var(--foreground)/.55);outline-offset:1px}
+.input{height:36px;width:100%;min-width:0;border-radius:6px;border:1px solid transparent;background:hsl(var(--menu));padding:4px 12px;font-size:14px}
+.input::placeholder{color:hsl(var(--muted-foreground))}
+.field{position:relative;display:flex;align-items:center;max-width:100%}
+.field>.ic{position:absolute;left:10px;color:hsl(var(--muted-foreground));pointer-events:none}
+.field .input{padding-left:34px}
+.sel{width:auto;padding-right:30px;appearance:none;-webkit-appearance:none;cursor:pointer;background-repeat:no-repeat;background-position:right 9px center;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%237d8696' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")}
+.date{width:148px}
+.range{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.lnk{border:0;background:none;padding:0;cursor:pointer;text-align:left;text-decoration:underline;text-decoration-color:hsl(var(--muted-foreground)/.5);text-underline-offset:3px;max-width:100%}
+.lnk:hover{text-decoration-color:currentColor}
+.only{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 4px 0 10px;border-radius:6px;background:hsl(var(--adm-bg));color:hsl(var(--adm));white-space:nowrap}
+.only button{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:0;border-radius:4px;background:none;color:inherit;cursor:pointer}
+.only button:hover{background:hsl(var(--background)/.6)}
+
+.badge{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap;flex:none}
+.badge .ic{width:12px;height:12px}
+.badge.ok{color:hsl(var(--ok));background:hsl(var(--ok-bg))}
+.badge.wait{color:hsl(var(--wait));background:hsl(var(--wait-bg))}
+.badge.off{color:hsl(var(--off));background:hsl(var(--off-bg))}
+.badge.adm,.badge.run{color:hsl(var(--adm));background:hsl(var(--adm-bg))}
+.pulse{width:7px;height:7px;border-radius:50%;background:currentColor;animation:pulse 1.2s ease-in-out infinite alternate}
+@keyframes pulse{to{opacity:.3}}
+.count{display:inline-flex;min-width:20px;height:20px;padding:0 6px;border-radius:999px;align-items:center;justify-content:center;font-size:12px;font-weight:600;background:hsl(var(--wait-bg));color:hsl(var(--wait));font-variant-numeric:tabular-nums}
+.you{font-size:11px;font-weight:600;padding:1px 6px;border-radius:4px;border:1px solid hsl(var(--tile-border));color:hsl(var(--muted-foreground));margin-left:6px;flex:none}
+.marks{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.note{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:hsl(var(--muted-foreground));white-space:nowrap}
+.note .ic{width:12px;height:12px}
+.avatar{width:32px;height:32px;border-radius:50%;background:hsl(var(--menu));display:inline-flex;align-items:center;justify-content:center;font-weight:600;flex:none}
+.avatar.lg{width:44px;height:44px;font-size:18px}
+
+/* ---------- tables ---------- */
+.tbl-wrap{flex:0 1 auto;min-height:90px;overflow:auto;border:1px solid hsl(var(--tile-border));border-radius:12px}
+table{border-collapse:collapse;width:100%;table-layout:fixed}
+th{position:sticky;top:0;z-index:1;background:hsl(var(--background));text-align:left;font-size:12px;font-weight:500;color:hsl(var(--muted-foreground));text-transform:uppercase;letter-spacing:.05em;padding:10px 12px;border-bottom:1px solid hsl(var(--sidebar-border));white-space:nowrap}
+td{padding:8px 12px;border-bottom:1px solid hsl(var(--sidebar-border));vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:hsl(var(--accent)/.3)}
+tr[data-do]{cursor:pointer}
+td .sub{display:block;font-size:12px;color:hsl(var(--muted-foreground));overflow:hidden;text-overflow:ellipsis}
+td.wrapok{white-space:normal}
+td.act{text-align:right;overflow:visible}
+td.act>*{vertical-align:middle;margin-left:4px}
+tr.exp:hover{background:none}
+tr.exp td{white-space:normal;background:hsl(var(--muted)/.6);padding:14px 16px}
+.pager{display:flex;align-items:center;gap:8px;flex:none}
+.state{display:flex;flex-direction:column;align-items:center;gap:6px;padding:44px 16px;text-align:center;border:1px dashed hsl(var(--tile-border));border-radius:12px}
+.state>.ic{width:28px;height:28px;stroke-width:1.5;color:hsl(var(--muted-foreground))}
+.state .btn{margin-top:8px}
+.sk{display:block;height:12px;border-radius:6px;background:hsl(var(--accent)/.7);animation:pulse 1s ease-in-out infinite alternate}
+@media (prefers-reduced-motion:reduce){.sk,.pulse{animation:none}}
+.facts{flex:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px 20px;margin:0}
+.facts dt{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:hsl(var(--muted-foreground))}
+.facts dd{margin:2px 0 0;overflow-wrap:anywhere}
+.err{display:flex;align-items:center;gap:6px;color:hsl(var(--danger));font-size:13px}
+.addadmin{display:flex;flex-direction:column;gap:8px;flex:none}
+.wait-list{list-style:none;margin:0;padding:0;border:1px solid hsl(var(--tile-border));border-radius:12px;flex:none}
+.wait-list li{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid hsl(var(--sidebar-border))}
+.wait-list li:last-child{border-bottom:0}
+
+/* ---------- menu and question ---------- */
+.menu{position:fixed;z-index:30;min-width:190px;background:hsl(var(--menu));border-radius:6px;padding:4px;display:flex;flex-direction:column}
+.menu button{display:flex;align-items:center;gap:8px;height:32px;padding:0 8px;border:0;background:none;border-radius:4px;text-align:left;cursor:pointer}
+.menu button:hover{background:hsl(var(--accent))}
+.menu .ic{color:hsl(var(--muted-foreground))}
+.menu hr{border:0;border-top:1px solid hsl(var(--tile-border));margin:4px 0;width:100%}
+.menu .dng,.menu .dng .ic{color:hsl(var(--danger))}
+.overlay{position:fixed;inset:0;background:rgb(0 0 0/.5);z-index:40}
+.dialog{position:fixed;z-index:50;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,calc(100vw - 32px));background:hsl(var(--popover));border:1px solid hsl(var(--tile-border));border-radius:12px;padding:24px;box-shadow:0 12px 32px rgb(0 0 0/.22);display:flex;flex-direction:column;gap:12px}
+.dialog h2{font-size:18px;font-weight:600;overflow-wrap:anywhere}
+.dialog p{color:hsl(var(--muted-foreground));overflow-wrap:anywhere}
+.dialog .callout{display:flex;gap:8px;align-items:flex-start;padding:10px 12px;border-radius:8px;background:hsl(var(--wait-bg));color:hsl(var(--wait))}
+.callout .ic{margin-top:2px}
+.d-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
+.screen{flex:1;display:flex;align-items:center;justify-content:center;padding:16px}
+.screen>div{width:100%;max-width:384px;text-align:center;display:flex;flex-direction:column;gap:16px}
+.screen h1{font-size:20px;font-weight:600}
+.screen .btn{width:100%}
+
+/* ---------- shells ---------- */
+.top{display:flex;align-items:center;gap:12px;padding:8px 16px;min-height:52px;flex:none}
+.top h1{font-size:16px;font-weight:600}
+.tabs{display:flex;gap:4px;padding:0 16px;border-bottom:1px solid hsl(var(--sidebar-border));overflow-x:auto;flex:none}
+.tab{display:inline-flex;align-items:center;gap:8px;padding:10px 12px;border:0;background:none;border-bottom:2px solid transparent;margin-bottom:-1px;color:hsl(var(--muted-foreground));font-weight:500;cursor:pointer;white-space:nowrap}
+.tab:hover{color:hsl(var(--foreground))}
+.tab[aria-current="page"]{color:hsl(var(--foreground));border-color:hsl(var(--foreground));font-weight:600}
+.view{flex:1;min-height:0;display:flex;flex-direction:column;gap:12px;padding:16px;width:100%;max-width:1440px;margin:0 auto;overflow:auto}
+.vhead{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;flex:none}
+.vhead h2{font-size:18px;font-weight:600}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;flex:none}
+.sec{display:flex;flex-direction:column;gap:8px;min-width:0;flex:none}
+.sec .tbl-wrap{flex:none}
+.sec h3{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+
+/* B: people first */
+.pills{display:flex;gap:2px;overflow-x:auto}
+.pill{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 12px;border:0;border-radius:8px;background:none;color:hsl(var(--muted-foreground));font-weight:500;cursor:pointer;white-space:nowrap}
+.pill:hover{background:hsl(var(--accent))}
+.pill[aria-current="page"]{background:hsl(var(--selected));color:hsl(var(--foreground));font-weight:600}
+.split{flex:1;min-height:0;display:flex;border-top:1px solid hsl(var(--sidebar-border))}
+.people{width:372px;flex:none;display:flex;flex-direction:column;min-height:0;border-right:1px solid hsl(var(--sidebar-border))}
+.pfilters{padding:12px;display:flex;flex-direction:column;gap:8px;flex:none}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:999px;border:0;background:hsl(var(--menu));font-size:13px;font-weight:500;color:hsl(var(--muted-foreground));cursor:pointer}
+.chip:hover{background:hsl(var(--accent))}
+.chip[aria-pressed="true"]{background:hsl(var(--foreground));color:hsl(var(--background))}
+.plist{flex:1;min-height:0;overflow:auto;padding:0 8px 8px;display:flex;flex-direction:column;gap:2px}
+.prow{display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;border:0;background:none;border-radius:8px;padding:8px;cursor:pointer;flex:none}
+.prow:hover{background:hsl(var(--accent))}
+.prow[aria-current="true"]{background:hsl(var(--selected))}
+.prow .pid{font-weight:500}
+.prow[aria-current="true"] .pid{font-weight:600}
+.people .pager{padding:8px 12px;border-top:1px solid hsl(var(--sidebar-border))}
+.pane{flex:1;min-width:0;min-height:0;overflow:auto;padding:20px 24px;display:flex;flex-direction:column;gap:16px}
+.phead{display:flex;flex-wrap:wrap;align-items:flex-start;gap:12px;flex:none}
+.phead h2{font-size:20px;font-weight:600;display:flex;align-items:center;overflow-wrap:anywhere}
+.pane .tabs{padding:0}
+.pane .tbl-wrap{min-height:220px}
+@media (max-width:860px){.split{flex-direction:column}.people{width:auto;max-height:42%;border-right:0;border-bottom:1px solid hsl(var(--sidebar-border))}}
+
+/* C: overview first */
+.cshell{flex:1;min-height:0;display:flex}
+.side{width:232px;flex:none;display:flex;flex-direction:column;border-right:1px solid hsl(var(--sidebar-border))}
+.brand{padding:16px 16px 10px;font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px}
+.brand span{font-size:11px;font-weight:600;padding:1px 6px;border-radius:4px;background:hsl(var(--menu));color:hsl(var(--muted-foreground))}
+.snav{flex:1;padding:8px;display:flex;flex-direction:column;gap:2px}
+.sitem{display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:8px;border:0;background:none;color:hsl(var(--muted-foreground));font-weight:500;cursor:pointer;text-align:left;width:100%}
+.sitem:hover{background:hsl(var(--accent))}
+.sitem[aria-current="page"]{background:hsl(var(--selected));color:hsl(var(--foreground));font-weight:600}
+.side .foot{border-top:1px solid hsl(var(--sidebar-border));padding:8px}
+.cmain{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}
+.cmain .view{max-width:1280px;gap:16px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;flex:none}
+.tile{display:flex;flex-direction:column;gap:2px;border:1px solid hsl(var(--tile-border));border-radius:12px;padding:12px 14px;background:none;text-align:left;cursor:pointer}
+.tile:hover{background:hsl(var(--accent))}
+.tile b{font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.2}
+.two{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:16px;flex:none}
+@media (max-width:1100px){.two{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:760px){.side{width:56px}.side .lbl,.brand{display:none}.sitem{justify-content:center;padding:0}}
+
+html,body{height:auto}
+body{display:block}
+.ix{max-width:1120px;margin:0 auto;padding-block:32px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:32px}
+.ix h1{font-size:28px;font-weight:600;line-height:1.2;text-wrap:balance;color:hsl(var(--heading-foreground))}
+.ix h2{font-size:18px;font-weight:600}
+.eyebrow{font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:.06em;color:hsl(var(--muted-foreground))}
+.lead{max-width:70ch;color:hsl(var(--muted-foreground));font-size:15px}
+.ix-head{display:flex;flex-direction:column;gap:8px}
+.ix section{display:flex;flex-direction:column;gap:12px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.card{display:flex;flex-direction:column;gap:12px;border:1px solid hsl(var(--tile-border));border-radius:12px;padding:16px;min-width:0}
+.card.pick{border-color:hsl(var(--foreground)/.55)}
+.card h2{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card svg.wire{width:100%;height:auto;border-radius:8px;background:hsl(var(--muted));display:block}
+.wire .l{fill:hsl(var(--muted-foreground)/.35)}
+.wire .d{fill:hsl(var(--foreground)/.7)}
+.wire .s{fill:none;stroke:hsl(var(--muted-foreground)/.45);stroke-width:1}
+.wire .w{fill:hsl(var(--wait))}
+.card dl{margin:0;display:flex;flex-direction:column;gap:8px}
+.card dt{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:hsl(var(--muted-foreground))}
+.card dd{margin:2px 0 0}
+.card code,.ix li code{font-family:var(--mono);font-size:12px}
+.card .btn{margin-top:auto;text-decoration:none;align-self:flex-start}
+.card a.btn.quiet{color:hsl(var(--foreground))}
+.ix td,.ix th{white-space:normal}
+.ix td:first-child{font-weight:500}
+.ix tbody tr:hover{background:none}
+.reco{border-radius:12px;background:hsl(var(--muted));padding:20px}
+.reco p{max-width:75ch}
+.ix ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;max-width:80ch}
+</style>
+<main class="ix">
+  <header class="ix-head">
+    <div class="row"><p class="eyebrow grow">Data agent frontend · admin area · design ideas</p><button class="btn quiet sm" id="ix-theme" type="button">Light / dark</button></div>
+    <h1>Three ways to lay out the admin area</h1>
+    <p class="lead">The three mock-ups use the same invented people, visits and chats, and the app's own colours. In each one the navigation, the paging, the filters (press Enter after typing), choosing a person and the question before an action work. Nothing is saved: a reload brings the data back. The striped bar on top of each mock-up is a guide and not part of the design. It jumps to the views and shows the address a view would have.</p>
+  </header>
+
+  <div class="cards">
+    <article class="card">
+      <svg class="wire" viewBox="0 0 300 170" role="img" aria-label="Sketch: a row of tabs above one full-width table">
+        <rect class="l" x="12" y="12" width="60" height="8" rx="4"/><rect class="d" x="12" y="32" width="38" height="6" rx="3"/><rect class="w" x="54" y="31" width="10" height="8" rx="4"/><rect class="l" x="74" y="32" width="40" height="6" rx="3"/><rect class="l" x="124" y="32" width="46" height="6" rx="3"/><rect class="l" x="180" y="32" width="40" height="6" rx="3"/><rect class="l" x="230" y="32" width="34" height="6" rx="3"/><rect class="d" x="12" y="42" width="52" height="2"/>
+        <rect class="s" x="12" y="56" width="276" height="102" rx="6"/><rect class="l" x="22" y="68" width="70" height="6" rx="3"/><rect class="l" x="110" y="68" width="90" height="6" rx="3"/><rect class="d" x="244" y="64" width="34" height="14" rx="4"/><rect class="l" x="22" y="92" width="60" height="6" rx="3"/><rect class="l" x="110" y="92" width="110" height="6" rx="3"/><rect class="d" x="244" y="88" width="34" height="14" rx="4"/><rect class="l" x="22" y="116" width="80" height="6" rx="3"/><rect class="l" x="110" y="116" width="70" height="6" rx="3"/><rect class="d" x="244" y="112" width="34" height="14" rx="4"/><rect class="l" x="22" y="140" width="50" height="6" rx="3"/><rect class="l" x="110" y="140" width="100" height="6" rx="3"/>
+      </svg>
+      <h2>A · Lists side by side</h2>
+      <p>Five tabs, one list each: Waiting, Accounts, Access log, Sessions, Admins. The admin area opens on Waiting. A person has no view of their own: "their visits" is the access log with that person preselected.</p>
+      <dl>
+        <div><dt>Best at</dt><dd>Looking across everybody for a period. It is also the simplest to learn and to build: every view is one list with its filters.</dd></div>
+        <div><dt>Weakest at</dt><dd>Following one person. Their state, their visits and their chats are on three different tabs.</dd></div>
+        <div><dt>Addresses</dt><dd><code>/admin</code> (shows Waiting) · <code>/admin/waiting</code> · <code>/admin/users</code> · <code>/admin/access-log</code> · <code>/admin/sessions</code> · <code>/admin/admins</code></dd></div>
+      </dl>
+      <a class="btn quiet" href="a-lists.html">Open mock-up A</a>
+    </article>
+
+    <article class="card pick">
+      <svg class="wire" viewBox="0 0 300 170" role="img" aria-label="Sketch: a list of people on the left, the chosen person on the right">
+        <rect class="l" x="12" y="12" width="40" height="8" rx="4"/><rect class="d" x="64" y="12" width="34" height="8" rx="4"/><rect class="w" x="100" y="12" width="10" height="8" rx="4"/><rect class="l" x="120" y="12" width="40" height="8" rx="4"/><rect class="l" x="168" y="12" width="36" height="8" rx="4"/><rect class="l" x="212" y="12" width="30" height="8" rx="4"/>
+        <rect class="s" x="12" y="30" width="96" height="128" rx="6"/><rect class="l" x="20" y="38" width="80" height="10" rx="5"/><rect class="l" x="20" y="58" width="56" height="6" rx="3"/><rect class="w" x="88" y="57" width="12" height="8" rx="4"/><rect class="d" x="16" y="72" width="88" height="20" rx="4" opacity=".28"/><rect class="d" x="20" y="79" width="50" height="6" rx="3"/><rect class="l" x="20" y="102" width="60" height="6" rx="3"/><rect class="l" x="20" y="122" width="48" height="6" rx="3"/><rect class="l" x="20" y="142" width="64" height="6" rx="3"/>
+        <circle class="l" cx="132" cy="46" r="10"/><rect class="d" x="148" y="38" width="70" height="8" rx="4"/><rect class="l" x="148" y="52" width="50" height="5" rx="2.5"/><rect class="d" x="244" y="38" width="44" height="14" rx="4"/><rect class="d" x="122" y="72" width="30" height="6" rx="3"/><rect class="l" x="162" y="72" width="30" height="6" rx="3"/><rect class="l" x="202" y="72" width="34" height="6" rx="3"/><rect class="d" x="122" y="81" width="30" height="2"/>
+        <rect class="s" x="122" y="92" width="166" height="66" rx="6"/><rect class="l" x="130" y="102" width="60" height="5" rx="2.5"/><rect class="l" x="204" y="102" width="70" height="5" rx="2.5"/><rect class="l" x="130" y="120" width="60" height="5" rx="2.5"/><rect class="l" x="204" y="120" width="56" height="5" rx="2.5"/><rect class="l" x="130" y="138" width="60" height="5" rx="2.5"/><rect class="l" x="204" y="138" width="74" height="5" rx="2.5"/>
+      </svg>
+      <h2>B · People first <span class="badge adm">Recommended</span></h2>
+      <p>The admin area opens on the people. The list is on the left with search and status filters. The right side shows the waiting people until a person is chosen, then that person: state, actions, visits, chats. The lists across everybody are separate views in the top bar.</p>
+      <dl>
+        <div><dt>Best at</dt><dd>The three most frequent jobs. Approving, finding one person and looking at what they did all happen on the opening screen.</dd></div>
+        <div><dt>Weakest at</dt><dd>It is the densest screen, and its address carries the most (list filters plus the chosen person, their tab and their dates). In a narrow window the person has to cover the list.</dd></div>
+        <div><dt>Addresses</dt><dd><code>/admin</code> (shows People) · <code>/admin/users</code>, with the person as <code>?user=…</code> · <code>/admin/access-log</code> · <code>/admin/sessions</code> · <code>/admin/admins</code></dd></div>
+      </dl>
+      <a class="btn primary" href="b-people.html">Open mock-up B</a>
+    </article>
+
+    <article class="card">
+      <svg class="wire" viewBox="0 0 300 170" role="img" aria-label="Sketch: a side menu, numbers on tiles, lists below">
+        <rect class="s" x="12" y="12" width="62" height="146" rx="6"/><rect class="d" x="20" y="22" width="40" height="7" rx="3.5"/><rect class="d" x="18" y="40" width="50" height="14" rx="4" opacity=".28"/><rect class="d" x="24" y="44" width="28" height="6" rx="3"/><rect class="l" x="24" y="64" width="34" height="6" rx="3"/><rect class="l" x="24" y="82" width="38" height="6" rx="3"/><rect class="l" x="24" y="100" width="30" height="6" rx="3"/><rect class="l" x="24" y="118" width="32" height="6" rx="3"/>
+        <rect class="s" x="86" y="12" width="202" height="42" rx="6"/><rect class="w" x="94" y="20" width="10" height="8" rx="4"/><rect class="l" x="110" y="21" width="60" height="6" rx="3"/><rect class="l" x="94" y="38" width="90" height="6" rx="3"/><rect class="d" x="246" y="32" width="34" height="14" rx="4"/>
+        <rect class="s" x="86" y="62" width="44" height="30" rx="6"/><rect class="d" x="93" y="76" width="18" height="9" rx="2"/><rect class="s" x="138" y="62" width="44" height="30" rx="6"/><rect class="d" x="145" y="76" width="18" height="9" rx="2"/><rect class="s" x="190" y="62" width="44" height="30" rx="6"/><rect class="d" x="197" y="76" width="18" height="9" rx="2"/><rect class="s" x="242" y="62" width="46" height="30" rx="6"/><rect class="d" x="249" y="76" width="18" height="9" rx="2"/>
+        <rect class="s" x="86" y="100" width="97" height="58" rx="6"/><rect class="l" x="94" y="110" width="70" height="5" rx="2.5"/><rect class="l" x="94" y="126" width="60" height="5" rx="2.5"/><rect class="l" x="94" y="142" width="76" height="5" rx="2.5"/><rect class="s" x="191" y="100" width="97" height="58" rx="6"/><rect class="l" x="199" y="110" width="70" height="5" rx="2.5"/><rect class="l" x="199" y="126" width="56" height="5" rx="2.5"/><rect class="l" x="199" y="142" width="74" height="5" rx="2.5"/>
+      </svg>
+      <h2>C · Overview first</h2>
+      <p>A side menu like the chat's, and a start page with the waiting people, six numbers (accounts, active, deactivated, admins, visits today, chats created today) and the latest visits and chats. Each person has a page of their own. The full lists are behind the menu.</p>
+      <dl>
+        <div><dt>Best at</dt><dd>Seeing at a glance what is going on today, and reading one person's whole situation on one page.</dd></div>
+        <div><dt>Weakest at</dt><dd>Everything except approving is one click further away. The start page also asks the backend about nine questions each time it loads, because each number is its own request.</dd></div>
+        <div><dt>Addresses</dt><dd><code>/admin</code> (the overview) · <code>/admin/users</code> · <code>/admin/users/{login ID}</code> · <code>/admin/access-log</code> · <code>/admin/sessions</code> · <code>/admin/admins</code></dd></div>
+      </dl>
+      <a class="btn quiet" href="c-overview.html">Open mock-up C</a>
+    </article>
+  </div>
+
+  <section>
+    <h2>Clicks from opening the admin area</h2>
+    <div class="tbl-wrap"><table style="min-width:680px;table-layout:auto">
+      <thead><tr><th>Job, most frequent first</th><th>A · Lists</th><th>B · People</th><th>C · Overview</th></tr></thead>
+      <tbody>
+        <tr><td>1. Approve a waiting person</td><td>2</td><td>2</td><td>2</td></tr>
+        <tr><td>2. Find one person and see their state</td><td>1</td><td>0</td><td>1</td></tr>
+        <tr><td>&nbsp;&nbsp;&nbsp;&nbsp;and change it</td><td>3 to activate, 4 to deactivate</td><td>3</td><td>3 to activate, 4 to deactivate</td></tr>
+        <tr><td>3. See one person's visits and chats</td><td>3 for the visits, 4 for both</td><td>1 for the visits, 2 for both</td><td>2 for the latest eight of each, 3 for a full list</td></tr>
+        <tr><td>4. Look across everybody for a period</td><td>2</td><td>2</td><td>1 for today, otherwise 2</td></tr>
+        <tr><td>5. Make a login ID an admin, or remove one</td><td>3</td><td>3</td><td>3</td></tr>
+      </tbody>
+    </table></div>
+    <p class="muted small">Typing a search text or a login ID is not counted. The confirming click of a question is counted. For a period, the count uses the "Today" or "Last 7 days" shortcut; choosing two days by hand is two clicks more.</p>
+  </section>
+
+  <section class="reco">
+    <h2>Recommendation: B</h2>
+    <p>The three jobs an admin does most often are about one person at a time: approve them, find them, see what they did. B is the only design where all three happen on the screen the admin area opens on. A and C are equal to B for approving and for looking across everybody, and behind it wherever a single person is concerned.</p>
+    <p>B costs more to build than A, because its address has to hold the list filters and the chosen person at the same time. That is a known amount of work, not a risk. If the simplest possible build matters more than the clicks, A is the one to take.</p>
+  </section>
+
+  <section>
+    <h2>The same in all three</h2>
+    <ul>
+      <li>Status is a word with an icon and a colour: Active, Waiting, Deactivated. "Admin" is a separate mark. An admin who is not approved also gets the note "Has access as admin".</li>
+      <li>Every change asks first, in the person's terms. Your own account offers neither "Deactivate" nor "Remove admin".</li>
+      <li>"Only <code>j.kim</code>" is a removable mark that means this person exactly. A typed search is a different filter and also finds <code>hj.kim</code>.</li>
+      <li>Dates are whole days in the admin's time zone, both end days included, with shortcuts for today and the last seven days.</li>
+      <li>The Admins view lists the admins by themselves and takes a typed login ID, because an admin can exist before their account does (<code>daeho.kwon</code> in the mock-ups).</li>
+      <li>The day fields are the browser's own date fields, so no new package is needed. They show a day in the format of the browser's language.</li>
+      <li>Pages of 50, a Refresh button on every list, no timers.</li>
+    </ul>
+  </section>
+</main>
+<script>
+document.getElementById("ix-theme").addEventListener("click", function () {
+  var r = document.documentElement;
+  var dark = r.dataset.theme ? r.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  r.dataset.theme = dark ? "light" : "dark";
+  try { localStorage.setItem("admin-design-theme", r.dataset.theme); } catch (e) {}
+});
+</script>

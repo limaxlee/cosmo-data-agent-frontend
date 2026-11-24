@@ -13,10 +13,11 @@ Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 
 2. [How to run it](#how-to-run-it)
 3. [Directory structure](#directory-structure)
 4. [Login](#login)
-5. [API calls — what is called from where](#api-calls--what-is-called-from-where)
-6. [Theming — how to change colors](#theming--how-to-change-colors)
-7. [Typography — how to change the font](#typography--how-to-change-the-font)
-8. [Major points to pay attention to](#major-points-to-pay-attention-to)
+5. [Admin area](#admin-area)
+6. [API calls — what is called from where](#api-calls--what-is-called-from-where)
+7. [Theming — how to change colors](#theming--how-to-change-colors)
+8. [Typography — how to change the font](#typography--how-to-change-the-font)
+9. [Major points to pay attention to](#major-points-to-pay-attention-to)
 
 ---
 
@@ -30,6 +31,8 @@ A single-feature chat application:
 - Messages go to an ADK backend; replies render as Markdown
 - Past sessions are listed in a sidebar, and can be opened, exported, or deleted
 - Light / dark / system theme, persisted in `localStorage`
+- Admins have an area of their own, where they approve people and look at the
+  accounts, the access log and the list of chats (see [Admin area](#admin-area))
 
 ### Routes
 
@@ -39,9 +42,16 @@ A single-feature chat application:
 | `/chat/new` | [`src/app/chat/new/page.tsx`](src/app/chat/new/page.tsx) | static |
 | `/chat/<sessionId>` | [`src/app/chat/[sessionId]/page.tsx`](src/app/chat/[sessionId]/page.tsx) | dynamic |
 | `/api/chat` | [`src/app/api/chat/route.ts`](src/app/api/chat/route.ts) | route handler (POST only) |
+| `/admin` | [`src/app/admin/page.tsx`](src/app/admin/page.tsx) | static |
+| `/admin/users` | [`src/app/admin/users/page.tsx`](src/app/admin/users/page.tsx) | static |
+| `/admin/users/<loginId>` | [`src/app/admin/users/[userId]/page.tsx`](src/app/admin/users/[userId]/page.tsx) | dynamic |
+| `/admin/access-log` | [`src/app/admin/access-log/page.tsx`](src/app/admin/access-log/page.tsx) | static |
+| `/admin/sessions` | [`src/app/admin/sessions/page.tsx`](src/app/admin/sessions/page.tsx) | static |
+| `/admin/admins` | [`src/app/admin/admins/page.tsx`](src/app/admin/admins/page.tsx) | static |
 
-Both pages render the same component, `ChatView`. The only difference is whether
-`initialSessionId` is passed.
+Both chat pages render the same component, `ChatView`. The only difference is
+whether `initialSessionId` is passed. The `/admin` pages are described under
+[Admin area](#admin-area).
 
 These are the addresses without a base path, as in local development. In the
 Docker build everything above sits under `/data-agent` (see
@@ -113,6 +123,7 @@ To swap them for a different typeface, see
 ```
 src/
 ├── app/                          # App Router: routing tree only
+│   ├── admin/                    # /admin/...  — the admin area, one page per view
 │   ├── api/chat/route.ts         # server-side proxy to the ADK backend
 │   ├── chat/
 │   │   ├── [sessionId]/page.tsx  # /chat/<id>  — open an existing chat
@@ -122,6 +133,7 @@ src/
 │   └── layout.tsx                # root layout, font + providers
 │
 ├── components/
+│   ├── admin/                    # the admin area (see "Admin area")
 │   ├── chat/                     # the chat feature
 │   │   ├── chat-view.tsx         # the whole chat screen (state lives here)
 │   │   ├── message-item.tsx      # one message bubble + Markdown rendering
@@ -135,9 +147,12 @@ src/
 │   └── user-provider.tsx         # UserProvider + useUser: the login state
 │
 └── lib/                          # non-React modules only
+    ├── admin-api.ts              # every /backend/admin/... call, and the reply types
+    ├── admin-format.ts           # how the admin area writes times and days
     ├── auth-client.ts            # the DICE login service, the pass, and apiFetch()
     ├── base-path.ts              # BASE_PATH, for addresses written by hand
     ├── session-api.ts            # HTTP client for the ADK session endpoints
+    ├── sidebar-collapsed.ts      # "sidebar closed", shared by the chat and the admin area
     ├── types.ts                  # Message, ChatSession
     └── utils.ts                  # cn() — DO NOT MOVE (see gotchas)
 
@@ -145,14 +160,15 @@ public/
 └── suggested-questions.json      # welcome-screen prompt cards, fetched at runtime
 
 dev/
+├── fake-backend.mjs              # stand-in backend for the admin area, local development only
 └── mock-login-service.mjs        # stand-in login service, local development only
 ```
 
 ### Conventions
 
 - **File names are kebab-case.** All of them, including components.
-- **`components/` groups by feature.** `chat/` is the only feature today. If a
-  second one appears, consider promoting to `src/features/`.
+- **`components/` groups by feature.** `chat/` and `admin/` are the two
+  features today.
 - **`lib/` means non-React.** Anything rendering JSX belongs in `providers/` or
   `components/`.
 - **Imports use the `@/` alias**, mapped to `src/` in [`tsconfig.json`](tsconfig.json).
@@ -272,6 +288,106 @@ in its `user_admins` table, then "Check again":
 ```sql
 INSERT INTO user_admins (user_id, added_by) VALUES ('<login id>', 'bootstrap');
 ```
+
+Without a local backend, [`dev/fake-backend.mjs`](dev/fake-backend.mjs) stands
+in for it. It is enough for the login check and for the whole admin area, not
+for chatting. See [Trying the admin area locally](#trying-the-admin-area-locally).
+
+---
+
+## Admin area
+
+A person the backend lists as an admin gets one more entry in the account menu
+at the bottom of the chat sidebar: **Admin**. It leads to `/admin`.
+
+| Address | What it shows |
+|---|---|
+| `/admin` | Overview: the people waiting for approval with "Activate" on each, six numbers, the newest visits and chats |
+| `/admin/users` | All accounts. Parameters: `search`, `status` (`waiting`, `active` or `deactivated`), `admin` (`true` or `false`), `page` |
+| `/admin/users/<loginId>` | One person: state, actions, details, their newest visits and chats |
+| `/admin/access-log` | Who opened the app, when, from where. Parameters: `user_id` (this person only), `search`, `from`, `to`, `page` |
+| `/admin/sessions` | The chats, as a list. The same parameters, plus `date=updated` to make the days about the last activity |
+| `/admin/admins` | The admins, and a field that makes a login ID an admin |
+
+### What protects it
+
+**The backend.** Every admin view asks `/backend/admin/...`, which this app's
+server passes on as `/admin/...`. The backend looks the caller up in its list
+of admins on every request and answers 403 `admin_required` to anyone else.
+
+The page only hides. `useUser().isAdmin` is the backend's answer from the page
+load: it decides whether the menu entry is shown, and whether
+[`AdminShell`](src/components/admin/admin-shell.tsx) renders the area or the
+screen "This area is for administrators" (without asking the backend for
+anything). The admin right can be taken away while the area is open. The next
+request is then refused, and the whole area is replaced by "You are no longer
+an administrator".
+
+> `/admin/users` is a **page of this app**. `/backend/admin/users` is the
+> **backend's data**. The two look alike and must not be mixed up.
+
+### Where the code is
+
+| File | What it owns |
+|---|---|
+| [`src/lib/admin-api.ts`](src/lib/admin-api.ts) | Every call to `/backend/admin/...` and the shapes of the replies. Turns picked days into moments, and tells the shell about `admin_required` |
+| [`src/components/admin/admin-shell.tsx`](src/components/admin/admin-shell.tsx) | The check, the layout with the sidebar, the two "not an admin" screens, and `AdminPage` (the header and the scrolling area of one view) |
+| [`src/components/admin/admin-sidebar.tsx`](src/components/admin/admin-sidebar.tsx) | The sidebar. Same widths, top and account row as the chat's, and the same "closed" setting ([`sidebar-collapsed.ts`](src/lib/sidebar-collapsed.ts)) |
+| [`src/components/admin/use-admin-query.ts`](src/components/admin/use-admin-query.ts) | Asks the backend when the filters change or after "Refresh". Keeps only the answer to the newest question |
+| [`src/components/admin/use-url-state.ts`](src/components/admin/use-url-state.ts) | Filters and page number in the address |
+| [`src/components/admin/confirm-action.tsx`](src/components/admin/confirm-action.tsx) | The question before each change, the four changes, and what each refusal says |
+| `*-view.tsx`, `*-table.tsx`, [`parts.tsx`](src/components/admin/parts.tsx) | One file per view, the two shared tables, and the small pieces (badges, pager, search box, day fields) |
+
+### Rules the views follow
+
+- **The backend searches, filters and cuts into pages.** A view never loads
+  everything to filter it in the browser. Pages are 50 rows.
+- **The state of a view lives in its address.** A reload keeps it, and so does
+  the login round trip that happens about once an hour.
+- **Nothing reloads by itself.** After a change the lists and the number of
+  waiting people are asked for again; otherwise there is the "Refresh" button.
+- **A change is never sent twice.** After a 401 on a change, `apiFetch()` gets
+  a new pass and does not repeat it. The question then says "Could not save.
+  Please try again."
+- **Days are whole days in the admin's own time zone**, both end days included.
+- **`user_id` and `search` are different filters.** `?user_id=j.kim` is that
+  person and nobody else; a typed text is sent as `search` and also finds
+  `hj.kim`.
+- **Only `/backend/admin/...`.** A request for another person's chat
+  (`/backend/apps/users/<someone else>/...`) is refused with `user_mismatch`,
+  which the app reads as "a different person has logged in" and reloads. An
+  admin sees the list of chats and never a conversation.
+- **`/backend/auth/me` is not asked again** to refresh `isAdmin`: every call
+  is recorded as a visit and would fill the access log this area shows.
+
+### Trying the admin area locally
+
+[`dev/fake-backend.mjs`](dev/fake-backend.mjs) answers `/auth/me`, an empty
+chat list and every `/admin/...` address on invented data it keeps in memory
+(about 70 accounts, a few thousand visits and chats). It follows the backend's
+rules for searching, paging, dates, statuses and refusals. It is never
+imported by the app and is not in the Docker image.
+
+```bash
+# terminal 1
+node dev/mock-login-service.mjs
+
+# terminal 2
+node dev/fake-backend.mjs
+
+# terminal 3 -- with these two lines in .env.local:
+#   AUTH_DEV_PROXY_TARGET=http://127.0.0.1:13081
+#   BACKEND_ORIGIN=http://127.0.0.1:13082
+npm run dev
+```
+
+The person who logs in (`MOCK_LOGIN_ID`) is an approved admin. Start the
+stand-in with `FAKE_IS_ADMIN=0` to see the app as somebody who is not.
+While it runs, `http://127.0.0.1:13082/__fake?...` switches things on and off:
+`admin_required=1` (the admin right is taken away), `delay=1500` (slow
+answers), `fail=1` (every admin address answers 500),
+`change=409:last_admin` (every change is refused with that status and code).
+All settings are listed at the top of the script.
 
 ---
 

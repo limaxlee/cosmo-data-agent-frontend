@@ -10,6 +10,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { SessionStorage } from "@/lib/session-api";
 import { writeDraft } from "@/lib/draft-storage";
 import { BASE_PATH } from "@/lib/base-path";
+import { readCollapsed, writeCollapsed } from "@/lib/sidebar-collapsed";
 import { ChatSession } from "@/lib/types";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { DataAgentWordmark } from "@/components/data-agent-wordmark";
@@ -39,31 +40,13 @@ import {
   PanelLeft,
   Pencil,
   LogOut,
+  Shield,
 } from "lucide-react";
 
-const SIDEBAR_COLLAPSED_KEY = "sidebar_collapsed";
-
 /**
- * Collapsed state has to outlive the component. /chat/new and /chat/[sessionId]
- * each render their own ChatView, so navigating between them remounts the
- * sidebar and would otherwise reset it to expanded. Null means "not toggled yet
- * this page load", in which case the stored preference is used.
- */
-let lastCollapsed: boolean | null = null;
-
-function readCollapsed(): boolean {
-  if (lastCollapsed !== null) return lastCollapsed;
-  if (typeof window === "undefined") return false;
-
-  try {
-    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-/**
- * The session list has to outlive the component for the same reason. A fresh
+ * The session list has to outlive the component, like the collapsed setting
+ * in sidebar-collapsed.ts: /chat/new and /chat/[sessionId] each render their
+ * own ChatView, so navigating between them remounts the sidebar. A fresh
  * sidebar used to start from an empty list and show the "No conversations yet"
  * placeholder until listSessions() came back, so every click on a chat made the
  * Recents list vanish for one round-trip and reappear. The last list fetched is
@@ -99,7 +82,7 @@ export function SessionSidebar({
   onCurrentSessionTitleChange,
   className = "",
 }: SessionSidebarProps) {
-  const { userId, logout } = useUser();
+  const { userId, isAdmin, logout } = useUser();
   const [sessions, setSessions] = useState<ChatSession[]>(() =>
     readSessions(userId),
   );
@@ -203,14 +186,8 @@ export function SessionSidebar({
   const toggleCollapsed = () => {
     const next = !isCollapsed;
 
-    lastCollapsed = next;
+    writeCollapsed(next);
     setIsCollapsed(next);
-
-    try {
-      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0");
-    } catch {
-      // Storage blocked - the sidebar still works for this page load.
-    }
   };
 
   const handleNewSession = () => {
@@ -295,6 +272,11 @@ export function SessionSidebar({
   const handleLogout = () => {
     setIsMobileOpen(false);
     logout();
+  };
+
+  const handleAdmin = () => {
+    setIsMobileOpen(false);
+    router.push("/admin");
   };
 
   const userInitial = (userId ?? "").trim().charAt(0).toUpperCase();
@@ -607,6 +589,18 @@ export function SessionSidebar({
                trigger, so a collapsed sidebar opens the same menu. */
             className="w-[17rem] border-0 shadow-none bg-input dark:bg-zinc-800"
           >
+            {/* Shown to admins only. This hides the entry and protects
+                nothing: the backend checks the admin right on every request
+                the admin area makes. */}
+            {isAdmin && (
+              <DropdownMenuItem
+                onClick={handleAdmin}
+                className="text-sm text-muted-foreground"
+              >
+                <Shield className="h-4 w-4 mr-2" />
+                Admin
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem
               onClick={handleLogout}
               className="text-sm text-muted-foreground"
